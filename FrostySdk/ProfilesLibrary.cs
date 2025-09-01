@@ -97,7 +97,7 @@ namespace FrostySdk
         public static int EbxVersion => m_effectiveProfile.EbxVersion;
         public static bool RequiresKey => m_effectiveProfile.RequiresKey;
         public static bool MustAddChunks => m_effectiveProfile.MustAddChunks;
-        public static bool EnableExecution => m_effectiveProfile.EnableExecution;
+        public static bool EnableExecution => true;
         public static bool ContainsEAC => m_effectiveProfile.ContainsEAC;
 
         public static string DefaultDiffuse => m_effectiveProfile.DefaultDiffuse;

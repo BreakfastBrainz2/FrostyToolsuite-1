@@ -2034,7 +2034,7 @@ namespace FrostySdk.IO
             {
                 if (classType == null)
                     classType = EbxReaderV2.std.GetClass(attr.Guid);
-                break;
+                //break;
             }
 
             return classType.Value;

@@ -121,6 +121,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScalableEmitterEditorPlugin
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CopyFilePathPlugin", "..\Plugins\CopyFilePathPlugin\CopyFilePathPlugin.csproj", "{A25C4A40-40F8-CECF-5228-0EECD08112CF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FNVHashCalculatorPlugin", "..\Plugins\FNV-1HashCalculatorPlugin\FNVHashCalculatorPlugin.csproj", "{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WeaponCreatorPlugin", "..\Plugins\WeaponCreatorPlugin\WeaponCreatorPlugin.csproj", "{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomizationCreatorPlugin", "..\Plugins\CustomizationCreatorPlugin\CustomizationCreatorPlugin.csproj", "{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Developer - Debug|x64 = Developer - Debug|x64
@@ -610,6 +616,36 @@ Global
 		{A25C4A40-40F8-CECF-5228-0EECD08112CF}.Release - Final|x64.Build.0 = Release - Final|x64
 		{A25C4A40-40F8-CECF-5228-0EECD08112CF}.Release|x64.ActiveCfg = Release - Alpha|x64
 		{A25C4A40-40F8-CECF-5228-0EECD08112CF}.Release|x64.Build.0 = Release - Alpha|x64
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}.Developer - Debug|x64.ActiveCfg = Developer - Debug|x64
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}.Developer - Debug|x64.Build.0 = Developer - Debug|x64
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}.Release - Alpha|x64.ActiveCfg = Release - Alpha|x64
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}.Release - Alpha|x64.Build.0 = Release - Alpha|x64
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}.Release - Beta|x64.ActiveCfg = Release - Beta|x64
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}.Release - Beta|x64.Build.0 = Release - Beta|x64
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}.Release - Final|x64.ActiveCfg = Release - Final|x64
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}.Release - Final|x64.Build.0 = Release - Final|x64
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}.Release|x64.ActiveCfg = Release - Alpha|x64
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F}.Release|x64.Build.0 = Release - Alpha|x64
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}.Developer - Debug|x64.ActiveCfg = Developer - Debug|x64
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}.Developer - Debug|x64.Build.0 = Developer - Debug|x64
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}.Release - Alpha|x64.ActiveCfg = Release - Alpha|x64
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}.Release - Alpha|x64.Build.0 = Release - Alpha|x64
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}.Release - Beta|x64.ActiveCfg = Release - Beta|x64
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}.Release - Beta|x64.Build.0 = Release - Beta|x64
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}.Release - Final|x64.ActiveCfg = Release - Final|x64
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}.Release - Final|x64.Build.0 = Release - Final|x64
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}.Release|x64.ActiveCfg = Release - Alpha|x64
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43}.Release|x64.Build.0 = Release - Alpha|x64
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}.Developer - Debug|x64.ActiveCfg = Developer - Debug|x64
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}.Developer - Debug|x64.Build.0 = Developer - Debug|x64
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}.Release - Alpha|x64.ActiveCfg = Release - Alpha|x64
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}.Release - Alpha|x64.Build.0 = Release - Alpha|x64
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}.Release - Beta|x64.ActiveCfg = Release - Beta|x64
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}.Release - Beta|x64.Build.0 = Release - Beta|x64
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}.Release - Final|x64.ActiveCfg = Release - Final|x64
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}.Release - Final|x64.Build.0 = Release - Final|x64
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}.Release|x64.ActiveCfg = Release - Alpha|x64
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5}.Release|x64.Build.0 = Release - Alpha|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -655,6 +691,9 @@ Global
 		{7C22D1BF-0282-8BD4-4B8F-5600B3520CC4} = {492048B6-848D-4675-A9BF-34A4751303F2}
 		{940F28C6-3F67-54FB-E4EE-06287F7B7C61} = {492048B6-848D-4675-A9BF-34A4751303F2}
 		{A25C4A40-40F8-CECF-5228-0EECD08112CF} = {492048B6-848D-4675-A9BF-34A4751303F2}
+		{CE0F8E36-2161-46C6-A4AD-E0990F3C0D7F} = {492048B6-848D-4675-A9BF-34A4751303F2}
+		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43} = {492048B6-848D-4675-A9BF-34A4751303F2}
+		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5} = {492048B6-848D-4675-A9BF-34A4751303F2}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C0B22EF1-4C3F-45B9-9F08-9793ED912199}
