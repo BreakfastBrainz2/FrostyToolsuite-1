@@ -1922,9 +1922,9 @@ namespace FrostySdk.IO
                             m_boxedValueData.Add(WriteBoxedValueRef(value));
                         }
 
-                        Write(index);
-                        Write((ulong)0);
-                        Write((uint)0);
+                        writer.Write(index);
+                        writer.Write((ulong)0);
+                        writer.Write((uint)0);
                     }
                     break;
 
