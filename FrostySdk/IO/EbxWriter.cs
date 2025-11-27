@@ -87,7 +87,7 @@ namespace FrostySdk.IO
                     default: throw new InvalidDataException($"Unhandled field type: {value.Type}");
                 }
 
-                return writer.ToByteArray();;
+                return writer.ToByteArray();
             }
         }
 
@@ -1246,21 +1246,26 @@ namespace FrostySdk.IO
                 WritePadding(16);
             }
 
-
             boxedValueOffset = (uint)(Position - m_stringsLength - stringsOffset);
             if (m_boxedValueData.Count > 0)
             {
                 for (int i = 0; i < m_boxedValueData.Count; i++)
                 {
+                    WritePadding(16);
+
                     var boxedValue = m_boxedValues[i];
 
-                    Write(0);
-                    boxedValue.Offset = (uint)(Position - boxedValueOffset);
+                    boxedValue.Offset = (uint)(Position - boxedValueOffset - m_stringsLength - stringsOffset);
+
+                    long lastPos = Position;
+                    Position = boxedValueRefOffset + i * 8;
+                    Write(boxedValue.Offset);
+                    Position = lastPos;
+
                     Write(m_boxedValueData[i]);
 
                     m_boxedValues[i] = boxedValue;
                 }
-                WritePadding(16);
             }
             stringsAndDataLen = (uint)(Position - stringsOffset);
 
@@ -1284,7 +1289,7 @@ namespace FrostySdk.IO
                 Write(arrays[i].ClassRef);
             }
 
-            if (ProfilesLibrary.EbxVersion == 4)
+            if ((ProfilesLibrary.EbxVersion & 4) != 0)
             {
                 Position = 0x38;
                 Write(m_boxedValueData.Count);
@@ -1918,8 +1923,25 @@ namespace FrostySdk.IO
                         {
                             EbxBoxedValue boxedValue = new EbxBoxedValue() { Offset = 0, Type = (ushort)value.Type };
 
+                            switch (value.Type)
+                            {
+                                case EbxFieldType.Struct:
+                                case EbxFieldType.Enum:
+                                case EbxFieldType.Array:
+                                    {
+                                        EbxClass boxedClass = GetClass(value.Value.GetType());
+                                        int typeRef = AddClass(boxedClass.Name, boxedClass.FieldIndex, (byte)boxedClass.FieldCount, boxedClass.Alignment, boxedClass.Type, boxedClass.Size, boxedClass.SecondSize, value.Value.GetType());
+                                        boxedValue.ClassRef = (ushort)typeRef;
+                                        break;
+                                    }
+                            }
+
+                            using (NativeWriter boxedWriter = new NativeWriter(new MemoryStream()))
+                            {
+                                WriteField(value.Value, value.Type, classAlignment, boxedWriter, isReference);
+                                m_boxedValueData.Add(boxedWriter.ToByteArray());
+                            }
                             m_boxedValues.Add(boxedValue);
-                            m_boxedValueData.Add(WriteBoxedValueRef(value));
                         }
 
                         writer.Write(index);
@@ -2023,15 +2045,11 @@ namespace FrostySdk.IO
         internal EbxClass GetClass(Type objType)
         {
             EbxClass? classType = null;
-
-            if (EbxReaderV2.patchStd != null)
+            foreach (TypeInfoGuidAttribute attr in objType.GetCustomAttributes<TypeInfoGuidAttribute>())
             {
-                foreach (TypeInfoGuidAttribute attr in objType.GetCustomAttributes<TypeInfoGuidAttribute>())
-                {
-                    classType = EbxReaderV2.patchStd.GetClass(attr.Guid);
+                classType = EbxReaderV2.patchStd.GetClass(attr.Guid);
 
-                    if (classType.HasValue) return classType.Value;
-                }
+                if (classType.HasValue) return classType.Value;
             }
 
             foreach (TypeInfoGuidAttribute attr in objType.GetCustomAttributes<TypeInfoGuidAttribute>())
