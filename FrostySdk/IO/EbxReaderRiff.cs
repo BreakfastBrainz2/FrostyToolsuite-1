@@ -183,8 +183,6 @@ namespace FrostySdk.IO
             arrayCount = ReadUInt();
             boxedValuesCount = ReadUInt();
 
-            arrayPosition = Position;
-
             for (int i = 0; i < arrayCount; i++)
             {
                 uint offset = ReadUInt();
@@ -204,8 +202,6 @@ namespace FrostySdk.IO
                     }
                 );
             }
-
-            boxedValuesPosition = Position;
 
             for (var i = 0; i < boxedValuesCount; i++)
             {

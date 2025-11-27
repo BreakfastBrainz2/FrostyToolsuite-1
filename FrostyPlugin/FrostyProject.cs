@@ -290,11 +290,13 @@ namespace Frosty.Core
                         }
                         else
                         {
+                            Stream stream = App.AssetManager.GetEbxStream(entry, true);
+
                             // asset is using just regular data
                             EbxAsset asset = entry.ModifiedEntry.DataObject as EbxAsset;
                             using (EbxBaseWriter ebxWriter = EbxBaseWriter.CreateProjectWriter(new MemoryStream(), EbxWriteFlags.IncludeTransient))
                             {
-                                ebxWriter.WriteAsset(asset, App.AssetManager.GetAsset(entry));
+                                ebxWriter.WriteAsset(asset);
                                 buf = ebxWriter.ToByteArray();
                             }
                         }

@@ -1279,9 +1279,9 @@ namespace FrostySdk.Managers
         /// <summary>
         /// legacy purposes only
         /// </summary>
-        public Stream GetEbxStream(EbxAssetEntry entry)
+        public Stream GetEbxStream(EbxAssetEntry entry, bool getUnmodifiedData = false)
         {
-            if (entry.IsModified)
+            if (entry.IsModified && !getUnmodifiedData)
             {
                 using (EbxWriter writer = new EbxWriter(new MemoryStream(), EbxWriteFlags.None, true))
                 {
@@ -1345,7 +1345,7 @@ namespace FrostySdk.Managers
             return null;
         }
 
-        public Stream GetAsset(AssetEntry entry)
+        private Stream GetAsset(AssetEntry entry)
         {
             // return modified data
             if (entry.ModifiedEntry != null && entry.ModifiedEntry.Data != null)
