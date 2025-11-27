@@ -2023,20 +2023,12 @@ namespace FrostySdk.IO
         internal EbxClass GetClass(Type objType)
         {
             EbxClass? classType = null;
-
-            if (EbxReaderV2.patchStd != null)
-            {
-                foreach (TypeInfoGuidAttribute attr in objType.GetCustomAttributes<TypeInfoGuidAttribute>())
-                {
-                    classType = EbxReaderV2.patchStd.GetClass(attr.Guid);
-
-                    if (classType.HasValue) return classType.Value;
-                }
-            }
-
             foreach (TypeInfoGuidAttribute attr in objType.GetCustomAttributes<TypeInfoGuidAttribute>())
             {
-                classType = EbxReaderV2.std.GetClass(attr.Guid);
+                classType = EbxReaderV2.patchStd.GetClass(attr.Guid);
+
+                if (!classType.HasValue)
+                    classType = EbxReaderV2.std.GetClass(attr.Guid);
 
                 if (classType.HasValue) break;
             }
