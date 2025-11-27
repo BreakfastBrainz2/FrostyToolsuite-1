@@ -4,10 +4,10 @@ using Frosty.Hash;
 using FrostySdk;
 using FrostySdk.IO;
 using FrostySdk.Managers;
-using FrostySdk.Managers.Entries;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using FrostySdk.Managers.Entries;
 
 namespace Frosty.Core.IO
 {
@@ -120,11 +120,9 @@ namespace Frosty.Core.IO
                         flags |= EbxWriteFlags.DoNotSort;
                     }
 
-                    Stream stream = App.AssetManager.GetEbxStream(entry, true);
-
                     using (EbxBaseWriter ebxWriter = EbxBaseWriter.CreateWriter(new MemoryStream(), flags))
                     {
-                        ebxWriter.WriteAsset(entry.ModifiedEntry.DataObject as EbxAsset, stream);
+                        ebxWriter.WriteAsset(entry.ModifiedEntry.DataObject as EbxAsset);
 
                         size = ebxWriter.Length;
                         data = Utils.CompressFile(ebxWriter.ToByteArray(), compressionOverride: compressType);

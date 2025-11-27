@@ -52,7 +52,7 @@ namespace FrostySdk.IO
             m_flags = inFlags;
         }
 
-        public virtual void WriteAsset(EbxAsset asset, Stream stream = null)
+        public virtual void WriteAsset(EbxAsset asset)
         {
         }
 
@@ -153,7 +153,7 @@ namespace FrostySdk.IO
             m_flags = inFlags;
         }
 
-        public override void WriteAsset(EbxAsset asset, Stream stream = null)
+        public override void WriteAsset(EbxAsset asset)
         {
             if (m_flags.HasFlag(EbxWriteFlags.DoNotSort))
             {
@@ -1051,7 +1051,7 @@ namespace FrostySdk.IO
         {
         }
 
-        public override void WriteAsset(EbxAsset asset, Stream stream = null)
+        public override void WriteAsset(EbxAsset asset)
         {
             if (m_flags.HasFlag(EbxWriteFlags.DoNotSort))
             {
