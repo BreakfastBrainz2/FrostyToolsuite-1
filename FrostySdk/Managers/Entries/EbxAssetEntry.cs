@@ -10,7 +10,7 @@ namespace FrostySdk.Managers.Entries
             get
             {
                 // TODO: @techdebt find better method to move blueprint bundles to sub-folder, this will most likely break writing.
-                if (ProfilesLibrary.IsLoaded(ProfileVersion.Battlefield2042) &&
+                if (ProfilesLibrary.IsLoaded(ProfileVersion.PlantsVsZombiesBattleforNeighborville) &&
                     (base.Name.StartsWith("cd_") || base.Name.StartsWith("md_") &! base.Name.Contains("win32/")))
                 {
                     return $"win32/{base.Name}";
