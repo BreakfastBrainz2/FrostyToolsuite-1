@@ -129,6 +129,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomizationCreatorPlugin"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GW2BundleManagerPlugin", "..\Plugins\PVZBundleManagerPlugin\GW2BundleManagerPlugin.csproj", "{177574DE-1B32-4C3E-B1E7-E439649EE6EA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProjectMerger", "..\Plugins\FrostyProjectMerger\ProjectMerger.csproj", "{742ADCAE-F062-C8D3-6DCC-E962E85851D7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Developer - Debug|x64 = Developer - Debug|x64
@@ -658,6 +660,16 @@ Global
 		{177574DE-1B32-4C3E-B1E7-E439649EE6EA}.Release - Final|x64.Build.0 = Release|x64
 		{177574DE-1B32-4C3E-B1E7-E439649EE6EA}.Release|x64.ActiveCfg = Release|x64
 		{177574DE-1B32-4C3E-B1E7-E439649EE6EA}.Release|x64.Build.0 = Release|x64
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Developer - Debug|x64.ActiveCfg = Developer - Debug|x64
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Developer - Debug|x64.Build.0 = Developer - Debug|x64
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release - Alpha|x64.ActiveCfg = Release - Alpha|x64
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release - Alpha|x64.Build.0 = Release - Alpha|x64
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release - Beta|x64.ActiveCfg = Release - Beta|x64
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release - Beta|x64.Build.0 = Release - Beta|x64
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release - Final|x64.ActiveCfg = Release - Final|x64
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release - Final|x64.Build.0 = Release - Final|x64
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release|x64.ActiveCfg = Release - Alpha|x64
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release|x64.Build.0 = Release - Alpha|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -707,6 +719,7 @@ Global
 		{D99F99E5-38B2-4E96-91A3-10AF07AD2E43} = {492048B6-848D-4675-A9BF-34A4751303F2}
 		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5} = {492048B6-848D-4675-A9BF-34A4751303F2}
 		{177574DE-1B32-4C3E-B1E7-E439649EE6EA} = {492048B6-848D-4675-A9BF-34A4751303F2}
+		{742ADCAE-F062-C8D3-6DCC-E962E85851D7} = {492048B6-848D-4675-A9BF-34A4751303F2}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C0B22EF1-4C3F-45B9-9F08-9793ED912199}
