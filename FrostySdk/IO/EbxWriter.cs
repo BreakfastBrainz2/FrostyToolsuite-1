@@ -1,6 +1,7 @@
 ﻿using FrostySdk.Attributes;
 using FrostySdk.Ebx;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -27,10 +28,6 @@ namespace FrostySdk.IO
             if ((ProfilesLibrary.EbxVersion & 1) != 0)
             {
                 return new EbxWriterV2(inStream, inFlags, leaveOpen);
-            }
-            else if (ProfilesLibrary.EbxVersion == 6)
-            {
-                return new EbxWriterRiff(inStream, inFlags, leaveOpen);
             }
             else
             {
@@ -322,10 +319,9 @@ namespace FrostySdk.IO
                 offset = Position;
                 for (int i = 0; i < arrays.Count; i++)
                 {
-                    //if (arrays[i].Count > 0)
-                    {
-                        EbxArray array = arrays[i];
-
+                    EbxArray array = arrays[i];
+                    if (array.Count > 0)
+                    { 
                         Write(array.Count);
 
                         array.Offset = (uint)(Position - offset);
@@ -340,7 +336,6 @@ namespace FrostySdk.IO
                         arrays[i] = array;
                     }
                 }
-                Position += 4;
                 WritePadding(16);
             }
 
@@ -1107,7 +1102,7 @@ namespace FrostySdk.IO
 
             ProcessData();
 
-            Write((int)((ProfilesLibrary.EbxVersion == 4) ? EbxVersion.Version4 : EbxVersion.Version2));
+            Write((int)((ProfilesLibrary.EbxVersion >= 4) ? EbxVersion.Version4 : EbxVersion.Version2));
             Write(0x00); // stringsOffset
             Write(0x00); // stringsAndDataLen
             Write(imports.Count);
@@ -1115,16 +1110,16 @@ namespace FrostySdk.IO
             Write(exportedCount);
             Write(uniqueClassCount);
             Write((ushort)classGuids.Count);
-            Write((ushort)0x00);
+            Write((ushort)fieldTypes.Count);
             Write((ushort)0x00); // typeNamesLen
             Write(0x00); // stringsLen
             Write(arrays.Count);
             Write(0x00); // dataLen
             Write(fileGuid);
 
-            if (ProfilesLibrary.EbxVersion == 4)
+            if (ProfilesLibrary.EbxVersion >= 4)
             {
-                Write(0xDEADBEEF);
+                Write(m_boxedValueData.Count);
                 Write(0xDEADBEEF);
             }
             else
@@ -1138,42 +1133,8 @@ namespace FrostySdk.IO
                 Write(importRef.ClassGuid);
             }
 
-            //WritePadding(16);
-
             long offset = Position;
-            //for (int i = 0; i < typeNames.Count; i++)
-            //    WriteNullTerminatedString(typeNames[i]);
-            //WritePadding(16);
-
             typeNamesLen = (ushort)(Position - offset);
-
-            //foreach (EbxField fieldType in fieldTypes)
-            //{
-            //    ushort type = fieldType.Type;
-            //    if (ProfilesLibrary.EbxVersion == 4)
-            //        type <<= 1;
-
-            //    Write(HashString(fieldType.Name));
-            //    Write(type);
-            //    Write(fieldType.ClassRef);
-            //    Write(fieldType.DataOffset);
-            //    Write(fieldType.SecondOffset);
-            //}
-
-            //foreach (EbxClass classType in classTypes)
-            //{
-            //    ushort type = classType.Type;
-            //    if (ProfilesLibrary.EbxVersion == 4)
-            //        type <<= 1;
-
-            //    Write(HashString(classType.Name));
-            //    Write(classType.FieldIndex);
-            //    Write(classType.FieldCount);
-            //    Write(classType.Alignment);
-            //    Write(type);
-            //    Write(classType.Size);
-            //    Write(classType.SecondSize);
-            //}
 
             foreach (Guid guid in classGuids)
             {
@@ -1185,6 +1146,7 @@ namespace FrostySdk.IO
                 Write(inst.ClassRef);
                 Write(inst.Count);
             }
+
             WritePadding(16);
 
             long arraysOffset = Position;
@@ -1194,20 +1156,26 @@ namespace FrostySdk.IO
                 Write(0);
                 Write(0);
             }
+
             WritePadding(16);
 
             long boxedValueRefOffset = Position;
             for (int i = 0; i < m_boxedValues.Count; i++)
             {
                 Write(0);
-                Write(0);
+                Write((ushort)0);
+                Write((ushort)0);
             }
+
             WritePadding(16);
 
             stringsOffset = (uint)Position;
 
             foreach (string str in strings)
+            {
                 WriteNullTerminatedString(str);
+            }
+
             WritePadding(16);
 
             m_stringsLength = (uint)(Position - stringsOffset);
@@ -1222,27 +1190,29 @@ namespace FrostySdk.IO
             if (arrays.Count > 0)
             {
                 offset = Position;
-                for (int i = 0; i < arrays.Count; i++)
+                for (int i = 0, j = 0; i < arrays.Count; i++)
                 {
-                    //if (arrays[i].Count > 0)
+                    EbxArray array = arrays[i];
+                    if (array.Count > 0)
                     {
-                        EbxArray array = arrays[i];
-
+                        Position += 4;
+                        WritePadding(16);
+                        Position -= 4;
                         Write(array.Count);
 
                         array.Offset = (uint)(Position - offset);
 
-                        Write(arrayData[i]);
-                        if (i != arrays.Count - 1)
-                            Write(0x00);
+                        long lastPos = Position;
+                        
+                        Position = arraysOffset + i * 12;
+                        Write(array.Offset);
+                        Position = lastPos;
 
-                        WritePadding(16);
-                        Position -= 4;
-
-                        arrays[i] = array;
+                        Write(arrayData[j]);
+                        j++;
                     }
+                    arrays[i] = array;
                 }
-                Position += 4;
                 WritePadding(16);
             }
 
@@ -1267,6 +1237,7 @@ namespace FrostySdk.IO
                     m_boxedValues[i] = boxedValue;
                 }
             }
+
             stringsAndDataLen = (uint)(Position - stringsOffset);
 
             Position = 0x04;
@@ -1274,7 +1245,6 @@ namespace FrostySdk.IO
             Write(stringsAndDataLen);
 
             Position = 0x1A;
-            //Write(typeNamesLen);
             Write((ushort)0x00);
             Write(m_stringsLength);
 
@@ -1289,10 +1259,9 @@ namespace FrostySdk.IO
                 Write(arrays[i].ClassRef);
             }
 
-            if ((ProfilesLibrary.EbxVersion & 4) != 0)
+            if (ProfilesLibrary.EbxVersion >= 4)
             {
-                Position = 0x38;
-                Write(m_boxedValueData.Count);
+                Position = 0x3C;
                 Write(boxedValueOffset);
 
                 Position = boxedValueRefOffset;
@@ -1845,50 +1814,41 @@ namespace FrostySdk.IO
 
                 case EbxFieldType.Array:
                     {
-                        int arrayClassIdx = typesToProcess.FindIndex((Type item) => item == obj.GetType());
+                        int arrayClassIdx = FindExistingClass(obj.GetType());
                         int arrayIdx = 0;
 
                         EbxClass arrayClassType = classTypes[arrayClassIdx];
-                        EbxField arrayFieldType = GetField(arrayClassType, arrayClassType.FieldIndex);// fieldTypes[arrayClassType.FieldIndex];
+                        ebxType = GetField(arrayClassType, arrayClassType.FieldIndex).DebugType;
 
-                        ebxType = arrayFieldType.DebugType;
+                        IList aObj = (IList)obj;
+                        int count = aObj.Count;
 
-                        Type arrayType = obj.GetType();
-                        int count = (int)arrayType.GetMethod("get_Count").Invoke(obj, null);
-
-                        //if (arrays.Count == 0)
-                        //{
-                        //    arrays.Add(
-                        //        new EbxArray()
-                        //        {
-                        //            Count = 0,
-                        //            ClassRef = arrayClassIdx
-                        //        });
-                        //    arrayData.Add(new byte[] { });
-                        //}
-
-                        MemoryStream arrayStream = new MemoryStream();
-                        using (NativeWriter arrayWriter = new NativeWriter(arrayStream))
+                        if (arrays.Count == 0)
                         {
-                            for (int i = 0; i < count; i++)
-                            {
-                                object subValue = arrayType.GetMethod("get_Item").Invoke(obj, new object[] { i });
-                                Type subValueType = subValue.GetType();
-
-                                WriteField(subValue, ebxType, classAlignment, arrayWriter, isReference);
-                            }
+                            arrays.Add(new EbxArray { Count = 0, ClassRef = arrayClassIdx });
                         }
 
-                        //if (count != 0)
+                        if (count > 0)
                         {
+                            MemoryStream arrayStream = new MemoryStream();
+                            using (NativeWriter arrayWriter = new NativeWriter(arrayStream))
+                            {
+                                for (int i = 0; i < count; i++)
+                                {
+                                    object subValue = aObj[i];
+
+                                    WriteField(subValue, ebxType, classAlignment, arrayWriter, isReference);
+                                }
+                            }
+                            arrayData.Add(arrayStream.ToArray());
+
                             arrayIdx = arrays.Count;
                             arrays.Add(
-                                new EbxArray()
+                                new EbxArray
                                 {
                                     Count = (uint)count,
                                     ClassRef = arrayClassIdx
                                 });
-                            arrayData.Add(arrayStream.ToArray());
                         }
                         writer.Write(arrayIdx);
                     }
