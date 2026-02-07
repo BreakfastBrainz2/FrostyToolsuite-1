@@ -1,12 +1,16 @@
-﻿v1.0.7 (HarGabt's fork)
+﻿v1.0.7 (Virjoinga's fork)
 --------
-This fork is based on selphea's fork and was designed for the most part around Need for Speed: Unbound support, and will be discontinued in favour of an upcoming 2.0.0 version of Tool Suite, which as of now is still a WIP, and which has no estimated time of release.
-
-selphea's changes:
-- Implemented workaround for NFS Unbound updates and hotfixes that kept breaking Frosty Tool Suite's modding functionality since Volume 3
-- Fixed launching via Steam, meaning DatapathFix is not required to use with this fork
+This fork is based on HarGabt's fork and was designed for Plants vs. Zombies: Battle for Neighborville support, and will be discontinued in favour of Frosty v2.0, which as of now is still a WIP, and which has no estimated time of release.
 
 Changes in my fork:
+
+(2026.02.07)
+--------
+- Added Project Merger plugin.
+- Custom strings now work (strings.txt).
+- TypeRef editing support.
+- ModManager now works with mods that use modified localized strings.
+- Files with large arrays should be modified correctly now (should no longer randomly crash at boot).
 
 (2025.07.19)
 --------
