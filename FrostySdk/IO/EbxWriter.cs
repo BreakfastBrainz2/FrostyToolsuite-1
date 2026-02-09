@@ -20,6 +20,11 @@ namespace FrostySdk.IO
     {
         public static EbxBaseWriter CreateProjectWriter(Stream inStream, EbxWriteFlags inFlags = EbxWriteFlags.None, bool leaveOpen = false)
         {
+            if (ProfilesLibrary.EbxVersion >= 4)
+            {
+                return new EbxWriterV2(inStream, inFlags, leaveOpen);
+            }
+
             return new EbxWriter(inStream, inFlags, leaveOpen);
         }
 
