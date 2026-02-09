@@ -4,6 +4,11 @@ This fork is based on HarGabt's fork and was designed for Plants vs. Zombies: Ba
 
 Changes in my fork:
 
+(2026.02.10)
+--------
+- Projects now save and load using their respective V2 versions.
+- NewWaveAsset's can now be added and removed from bundles.
+
 (2026.02.07)
 --------
 - Added Project Merger plugin.
