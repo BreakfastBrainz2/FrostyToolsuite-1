@@ -380,6 +380,53 @@ namespace BundleEditPlugin
         }
     }
 
+    public class NewWaveExtension : AddToBundleExtension
+    {
+        public override string AssetType => "NewWaveAsset";
+        public override void AddToBundle(EbxAssetEntry entry, BundleEntry bentry)
+        {
+            base.AddToBundle(entry, bentry);
+
+            EbxAsset asset = App.AssetManager.GetEbx(entry);
+            dynamic soundAsset = asset.RootObject;
+
+            foreach (var soundDataChunk in soundAsset.Chunks)
+            {
+                ChunkAssetEntry chunkEntry = App.AssetManager.GetChunkEntry(soundDataChunk.ChunkId);
+                chunkEntry.AddToBundle(App.AssetManager.GetBundleId(bentry));
+                entry.LinkAsset(chunkEntry);
+            }
+
+            var resEntry = App.AssetManager.GetResEntry(entry.Name);
+            resEntry.AddToBundle(App.AssetManager.GetBundleId(bentry));
+            entry.LinkAsset(resEntry);
+        }
+    }
+
+    public class RemoveNewWaveExtension : RemoveFromBundleExtension
+    {
+        public override string AssetType => "NewWaveAsset";
+
+        public override void RemoveFromBundle(EbxAssetEntry entry, BundleEntry bentry)
+        {
+            base.RemoveFromBundle(entry, bentry);
+
+            EbxAsset soundasset = App.AssetManager.GetEbx(entry);
+            dynamic soundobject = soundasset.RootObject;
+
+            foreach (var soundChunk in soundobject.Chunks)
+            {
+                ChunkAssetEntry ChunkEntry = App.AssetManager.GetChunkEntry(soundChunk.ChunkId);
+                ChunkEntry.AddedBundles.Remove(App.AssetManager.GetBundleId(bentry));
+                entry.LinkAsset(ChunkEntry);
+            }
+
+            var resEntry = App.AssetManager.GetResEntry(entry.Name);
+            resEntry.AddedBundles.Remove(App.AssetManager.GetBundleId(bentry));
+            entry.LinkAsset(resEntry);
+        }
+    }
+
     public class AddToBundleExtension
     {
         public virtual string AssetType => null;
