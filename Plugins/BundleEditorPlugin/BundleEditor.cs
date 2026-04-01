@@ -427,6 +427,40 @@ namespace BundleEditPlugin
         }
     }
 
+    public class PhysicsAssetExtension : AddToBundleExtension
+    {
+        public override string AssetType => "PhysicsAsset";
+        public override void AddToBundle(EbxAssetEntry entry, BundleEntry bentry)
+        {
+            base.AddToBundle(entry, bentry);
+
+            EbxAsset asset = App.AssetManager.GetEbx(entry);
+            dynamic obj = asset.RootObject;
+
+            ResAssetEntry resEntry = App.AssetManager.GetResEntry(obj.Resource);
+            resEntry.AddToBundle(App.AssetManager.GetBundleId(bentry));
+
+            entry.LinkAsset(resEntry);
+        }
+    }
+
+    public class RemovePhysicsAssetExtension : RemoveFromBundleExtension
+    {
+        public override string AssetType => "PhysicsAsset";
+        public override void RemoveFromBundle(EbxAssetEntry entry, BundleEntry bentry)
+        {
+            base.RemoveFromBundle(entry, bentry);
+
+            EbxAsset asset = App.AssetManager.GetEbx(entry);
+            dynamic obj = asset.RootObject;
+
+            ResAssetEntry resEntry = App.AssetManager.GetResEntry(obj.Resource);
+            resEntry.AddedBundles.Remove(App.AssetManager.GetBundleId(bentry));
+
+            entry.LinkAsset(resEntry);
+        }
+    }
+
     public class AddToBundleExtension
     {
         public virtual string AssetType => null;
