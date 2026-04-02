@@ -506,6 +506,28 @@ namespace DuplicationPlugin
         }
     }
 
+    public class PhysicsAssetExtension : DuplicateAssetExtension
+    {
+        public override string AssetType => "PhysicsAsset";
+
+        public override EbxAssetEntry DuplicateAsset(EbxAssetEntry entry, string newName, bool createNew, Type newType)
+        {
+            EbxAssetEntry newEntry = base.DuplicateAsset(entry, newName, createNew, newType);
+            EbxAsset newAsset = App.AssetManager.GetEbx(newEntry);
+            dynamic newRoot = newAsset.RootObject;
+
+            // Duplicate the res
+            ResAssetEntry resEntry = App.AssetManager.GetResEntry(newRoot.Resource);
+            ResAssetEntry newResEntry = DuplicateRes(resEntry, newEntry.Name, ResourceType.PhysicsResource);
+
+            // Update the ebx
+            newRoot.Resource = newResEntry.ResRid;
+            newEntry.LinkAsset(newResEntry);
+
+            return newEntry;
+        }
+    }
+
     public class DuplicateAssetExtension
     {
         public virtual string AssetType => null;
