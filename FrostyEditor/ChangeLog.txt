@@ -6,7 +6,7 @@ Changes in my fork:
 
 (2026.04.04)
 --------
-- Bundle Editor can now add and remove PhysicAssets.
+- Bundle Editor can now add and remove PhysicsAssets.
 - Fix PhysicsResources not being created when duping PhysicsAssets.
 - Fix Frosty not using file names from the patch folder.
 
