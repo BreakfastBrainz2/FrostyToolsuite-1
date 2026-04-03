@@ -395,10 +395,12 @@ namespace FrostySdk.Managers
 
                         if (m_ebxGuidList.ContainsKey(entry.Guid))
                         {
-                            //logger.Log("Existing asset found with same guid '{0}'", entry.Guid);
-                            continue;
+                            ebxToRemove.Add(m_ebxGuidList[entry.Guid]);
                         }
-                        m_ebxGuidList.Add(entry.Guid, entry);
+                        else
+                        {
+                            m_ebxGuidList.Add(entry.Guid, entry);
+                        }
                     }
                 }
                 else

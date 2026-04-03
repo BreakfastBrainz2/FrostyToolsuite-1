@@ -393,7 +393,7 @@ namespace FrostySdk.IO
             if (add)
             {
                 int hashCode = obj.GetHashCode();
-                if (objsToProcessSet.Contains(hashCode))
+                if (objsToProcessSet.Contains(hashCode) && objs.Contains(obj))
                     return new List<object>();
 
                 objsToProcessSet.Add(hashCode);
