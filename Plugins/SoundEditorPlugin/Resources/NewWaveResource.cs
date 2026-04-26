@@ -1,18 +1,20 @@
-﻿using Frosty.Core;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Frosty.Controls;
+using Frosty.Core;
+using Frosty.Core.Controls;
 using Frosty.Hash;
 using FrostySdk;
 using FrostySdk.Attributes;
 using FrostySdk.Ebx;
 using FrostySdk.IO;
 using FrostySdk.Managers;
-using FrostySdk.Resources;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using FrostySdk.Managers.Entries;
+using FrostySdk.Resources;
 
 namespace SoundEditorPlugin.Resources
 {
@@ -40,6 +42,14 @@ namespace SoundEditorPlugin.Resources
         public uint LastLoopSegmentIndex { get; set; }
         [EbxFieldMeta(EbxFieldType.Boolean)]
         public bool IsStream { get; set; }
+
+        [DisplayName("B7126493")]
+        [EbxFieldMeta(EbxFieldType.UInt32)]
+        public uint unkB7126493 { get; set; }
+
+        [DisplayName("65610234")]
+        [EbxFieldMeta(EbxFieldType.UInt32)]
+        public uint unk65610234 { get; set; }
     }
     [EbxClassMeta(EbxFieldType.Struct)]
     public class Segment
@@ -257,6 +267,10 @@ namespace SoundEditorPlugin.Resources
         public List<Subtitle> Subtitles { get; set; } = new List<Subtitle>();
         public List<Persistence> Persistences { get; set; } = new List<Persistence>();
 
+        public uint BankKey { get => key; set => key = value; }
+
+        public Dset[] Dsets { get => dsets; }
+
         private static Endian endian;
         private byte alignment;
         private byte unkown1;
@@ -388,6 +402,12 @@ namespace SoundEditorPlugin.Resources
                 set { fields = value; }
             }
 
+            public uint DsetKey
+            {
+                get { return unknown1; }
+                set { unknown1 = value; }
+            }
+
             private uint nameHash;
             private uint unknown1;
             private uint elemCount;
@@ -410,7 +430,7 @@ namespace SoundEditorPlugin.Resources
                     throw new FileFormatException("Wrong format of DataSet");
                 reader.ReadInt(); // size
                 nameHash = reader.ReadUInt(endian);
-                unknown1 = reader.ReadUInt(endian);
+                unknown1 = reader.ReadUInt(endian); // generally the same as the main bank key
                 reader.ReadInt(); // always 0?? offset for bank start maybe?
                 reader.ReadInt();
                 if (dataOffset != reader.ReadUInt(endian))
@@ -748,6 +768,7 @@ namespace SoundEditorPlugin.Resources
                 storeParam1 = reader.ReadInt(endian);
                 storeParam2 = reader.ReadInt(endian);
                 tableOffset = reader.ReadUInt(endian);
+                reader.ReadUInt(endian); // next reference offset (not needed)
 
                 if (storeType > 0 && tableOffset > 0)
                 {
@@ -1181,14 +1202,14 @@ namespace SoundEditorPlugin.Resources
                         else if (keyValuePairs.Count > 2)
                             bits = 0x2;
 
-                        byte size3 = newValues.ToArray().GetBiggestSize();
+                        byte size3 = newValues.ToArray().GetBiggestSignedSize();
 
 
                         using (NativeWriter writer = new NativeWriter(new MemoryStream()))
                         {
                             long[] keys = keyValuePairs.Keys.ToArray();
                             Array.Sort(keys);
-                            writer.Write(keys.ConvertToBytes(endian));
+                            writer.Write(keys.ConvertToBytes(endian, true));
 
                             List<int> idx = new List<int>();
                             for (int j = 0; j < values.Count; j++)
@@ -1316,12 +1337,18 @@ namespace SoundEditorPlugin.Resources
         public override void Read(NativeReader reader, AssetManager am, ResAssetEntry entry, ModifiedResource modifiedData)
         {
             base.Read(reader, am, entry, modifiedData);
+
+            if (entry.HasModifiedData && entry.ModifiedEntry.ResMeta != null)
+            {
+                resMeta = entry.ModifiedEntry.ResMeta;
+            }
+
             endian = reader.ReadSizedString(4).Equals("SBle") ? Endian.Little : Endian.Big;
             reader.ReadInt(endian); // size of bank
             alignment = reader.ReadByte();
             unkown1 = reader.ReadByte();
             dsetCount = reader.ReadUShort(endian);
-            key = reader.ReadUInt(endian);
+            key = reader.ReadUInt(endian); // hash of the newwaveasset's primary instance guid
             sbrType = reader.ReadUInt(endian);
             unkown2 = reader.ReadUInt(endian);
             tableOffset = reader.ReadUInt(endian);
@@ -1417,6 +1444,8 @@ namespace SoundEditorPlugin.Resources
                                 case 0xD00A6005: v.SegmentCount = field.Values[j]; break;
                                 case 0x4AF36C62: v.SubtitleCount = field.Values[j]; break;
                                 case 0xD7C152C5: v.FirstSubtitleIndex = field.Values[j]; break;
+                                case 0xB7126493: v.unkB7126493 = field.Values[j]; break;
+                                case 0x65610234: v.unk65610234 = field.Values[j]; break;
                                 default: App.Logger.LogWarning("Unkown field: " + field.NameHash.ToString("X8") + "Dset: Variations"); break;
                             }
                         }
@@ -1814,43 +1843,73 @@ namespace SoundEditorPlugin.Resources
             //    result = 2;
             return biggestSize;
         }
-        public static byte GetShift(this long[] array, out long[] outArray)
+        public static byte GetBiggestSignedSize(this long[] array)
         {
-            byte size = GetBiggestSize(array);
-            Dictionary<int, List<long>> shifts = new Dictionary<int, List<long>>();
-
+            byte biggestSize = 1;
             foreach (var item in array)
             {
-                for (int i = 0; i <= byte.MaxValue; i++)
+                if (item > byte.MaxValue)
                 {
-                    double b = (double)item / Math.Pow(2, i);
-                    if (b % 1 == 0)
+                    if (biggestSize < 2)
                     {
-                        if (!shifts.ContainsKey(i))
-                            shifts.Add(i, new List<long>());
-                        shifts[i].Add(Convert.ToInt64(b));
+                        biggestSize = 2;
+                    }
+
+                    if (item > short.MaxValue)
+                    {
+                        if (biggestSize < 4)
+                        {
+                            biggestSize = 4;
+                        }
+
+                        if (item > int.MaxValue)
+                        {
+                            return 8;
+                        }
                     }
                 }
             }
-            List<long> bytes = new List<long>(byte.MaxValue);
-            foreach (var item in shifts)
+            return biggestSize;
+        }
+
+        public static byte GetShift(this long[] array, out long[] outArray)
+        {
+            int commonShift = byte.MaxValue;
+            foreach (var value in array)
             {
-                if (item.Value.Count != array.Length)
-                    continue;
-                bytes.Add(item.Key);
+                int shift = 0;
+                ulong uValue = (ulong)value;
+
+                while (shift < byte.MaxValue && (uValue & 1) == 0)
+                {
+                    shift++;
+                    uValue >>= 1;
+                }
+
+                if (shift < commonShift)
+                    commonShift = shift;
+
+                if (commonShift == 0)
+                    break;
             }
-            byte result = (byte)bytes.GetLowest();
-            if (shifts[result].ToArray().GetBiggestSize() < size)
+            if (commonShift > 0)
             {
-                outArray = shifts[result].ToArray();
-                return result;
+                long[] reduced = array.Select(val => val >> commonShift).ToArray();
+                byte originalSize = GetBiggestSize(array);
+                byte reducedSize = GetBiggestSize(reduced);
+
+                if (reducedSize < originalSize)
+                {
+                    outArray = reduced;
+                    return (byte)commonShift;
+                }
             }
             outArray = array;
             return 0;
         }
-        public static byte[] ConvertToBytes(this long[] array, Endian endian)
+        public static byte[] ConvertToBytes(this long[] array, Endian endian, bool signed = false)
         {
-            byte size = array.GetBiggestSize();
+            byte size = signed ? array.GetBiggestSignedSize() : array.GetBiggestSize();
             byte[] outArray = new byte[size * array.Length];
             for (int i = 0; i < array.Length; i++)
             {
@@ -1919,6 +1978,46 @@ namespace SoundEditorPlugin.Resources
             RuntimeVariations = res.Variations;
             Segments = res.Segments;
             Persistence = res.Persistences;
+        }
+
+        public override void Save(object e)
+        {
+            dynamic og = Original;
+            EbxAssetEntry ebxEntry = App.AssetManager.GetEbxEntry((string)og.Name);
+            ResAssetEntry resEntry = App.AssetManager.GetResEntry((string)og.Name);
+            NewWaveResource resource = App.AssetManager.GetResAs<NewWaveResource>(resEntry);
+
+            ItemModifiedEventArgs item = e as ItemModifiedEventArgs;
+            if (item.Item.Name == "SamplesOffset" || item.Item.Name == "SegmentLength")
+            {
+                for (int i = 0; i < item.Item.Parent.Parent.Children.Count; i++)
+                {
+                    var child = item.Item.Parent.Parent.Children[i];
+                    resource.Segments[i] = child.Value as Segment;
+                }
+            }
+
+            if (item.Item.Name == "StreamChunkIndex" || item.Item.Name == "MemoryChunkIndex")
+            {
+                for (int i = 0; i < item.Item.Parent.Parent.Children.Count; i++)
+                {
+                    var child = item.Item.Parent.Parent.Children[i];
+                    resource.Variations[i] = child.Value as Variation;
+                }
+            }
+
+            if (item.Item.Name == "ChunkSize" || item.Item.Name == "ChunkId")
+            {
+                for (int i = 0; i < item.Item.Parent.Parent.Children.Count; i++)
+                {
+                    var child = item.Item.Parent.Parent.Children[i];
+                    resource.Chunks[i].ChunkId = ((dynamic)child.Value).ChunkId;
+                    resource.Chunks[i].ChunkSize = ((dynamic)child.Value).ChunkSize;
+                }
+            }
+
+            App.AssetManager.ModifyRes(((string)og.Name).ToLower(), resource);
+            ebxEntry.LinkAsset(resEntry);
         }
     }
     public class LocalizedWaveAssetOverride : BaseTypeOverride

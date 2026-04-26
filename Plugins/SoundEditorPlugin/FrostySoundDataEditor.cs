@@ -275,6 +275,23 @@ namespace SoundEditorPlugin
 
             voice = new SourceVoice(player.AudioSystem, format, true);
             voice.SetOutputVoices(new VoiceSendDescriptor(player.OutputVoice));
+
+            bool ForceStereo = Config.Get<bool>("ForceStereo", true);
+            if (ForceStereo)
+            {
+                // To force stereo (2-channel) output: take input channel count (track channel count) * output channel count (2)
+                // make an array of floats representing volume level (range is 0-100%, where 100 = 1.0f) and turn every channel up to 100%
+                List<float> fMatrix = new List<float>();
+
+                for (int i = 0; i < track.ChannelCount; i++)
+                {
+                    fMatrix.Add(1.0f); // L channel
+                    fMatrix.Add(1.0f); // R channel
+                }
+
+                voice.SetOutputMatrix(track.ChannelCount, 2, fMatrix.ToArray());
+            }
+
             voice.BufferEnd += Voice_BufferEnd;
 
             Voice_BufferEnd(IntPtr.Zero);
@@ -670,47 +687,86 @@ namespace SoundEditorPlugin
         {
             string codec = GetFormat(track.CodecUnformatted);
             bool isSeekable = ((dynamic)Asset.RootObject).IsSeekable;
-            (byte[] spsData, byte[] seekTableData) = await ToolHelper.Instance.ImportSound(importFileName, codec, isSeekable);
+            bool shouldRemix = Config.Get<bool>("AutoRemixOnImport", true);
+
+            (byte[] spsData, byte[] seekTableData) = await ToolHelper.Instance.ImportSound(importFileName, codec, isSeekable, track.ChannelCount, shouldRemix);
 
             bool hasStreamPool = ((PointerRef)((dynamic)base.Asset.RootObject).StreamPool).Type != PointerRefType.Null;
             byte[] chunkData;
             uint seekTableOffset, samplesOffset;
             dynamic originalSoundWave = RootObject;
 
+            int chunkIndex = track.ChunkIndex;
+
+            dynamic soundDataChunk = originalSoundWave.Chunks[track.ChunkIndex];
+            ChunkAssetEntry existingChunkEntry = App.AssetManager.GetChunkEntry(track.ChunkId);
+            NativeReader existingChunkData = new NativeReader(App.AssetManager.GetChunk(existingChunkEntry));
+
+            // For assets with streampools, we want to add as few chunks as possible, so if there's already a chunk added for new tracks, use that
+            bool hasExistingNewChunk = false;
+
+            // As far as we know, no vanilla assets with streampools have more than one chunk,
+            // so if the asset has more than one chunk, it is safe to assume the user has already added a new chunk from a previous import
+            if (hasStreamPool && originalSoundWave.Chunks.Count > 1)
+            {
+                soundDataChunk = originalSoundWave.Chunks[originalSoundWave.Chunks.Count - 1];
+                existingChunkEntry = App.AssetManager.GetChunkEntry(soundDataChunk.ChunkId);
+                existingChunkData = new NativeReader(App.AssetManager.GetChunk(existingChunkEntry));
+
+                chunkIndex = originalSoundWave.Chunks.Count - 1;
+
+                hasExistingNewChunk = true;
+            }
+
             if (seekTableData != null)
             {
-                int alignedSampleOffset = AlignTo(seekTableData.Length, 4);
-                chunkData = new byte[alignedSampleOffset + spsData.Length];
+                // Adjust offsets depending on whether we are using an existing chunk or a new one
+                uint seekTableStart = hasExistingNewChunk ? (uint)existingChunkData.Length : 0u;
+
+                seekTableOffset = seekTableStart | GetSegmentOffsetFlags(isValid: true, hasStreamPool);
+                int alignedSampleOffset = AlignTo((int)seekTableOffset + seekTableData.Length, 4);
+                chunkData = new byte[(alignedSampleOffset - seekTableStart) + spsData.Length];
                 Array.Copy(seekTableData, chunkData, seekTableData.Length);
-                Array.Copy(spsData, 0, chunkData, alignedSampleOffset, spsData.Length);
-                seekTableOffset = 0u | GetSegmentOffsetFlags(isValid: true, hasStreamPool);
+                Array.Copy(spsData, 0, chunkData, alignedSampleOffset - seekTableStart, spsData.Length);
                 samplesOffset = (uint)alignedSampleOffset | GetSegmentOffsetFlags(isValid: true, hasStreamPool);
             }
             else
             {
+                // Adjust offsets depending on whether we are using an existing chunk or a new one
                 chunkData = spsData;
-                samplesOffset = 0u | GetSegmentOffsetFlags(isValid: true, hasStreamPool);
-                seekTableOffset = 0u | GetSegmentOffsetFlags(isValid: false, hasStreamPool);
+                uint offsetStart = hasExistingNewChunk ? (uint)existingChunkData.Length : 0u;
+                samplesOffset = offsetStart | GetSegmentOffsetFlags(isValid: true, hasStreamPool);
+                seekTableOffset = 0 | GetSegmentOffsetFlags(isValid: false, hasStreamPool);
             }
 
-            Guid newGuid = App.AssetManager.AddChunk(chunkData);
+            Guid newGuid = !hasStreamPool ? App.AssetManager.AddChunk(chunkData, CompressionType.None) : soundDataChunk.ChunkId;
 
             float durationInSeconds = ToolHelper.Instance.GetDurationInSecondsFromBuffer(spsData);
-            int chunkIndex = track.ChunkIndex;
 
             NewWaveResource newWave = App.AssetManager.GetResAs<NewWaveResource>(App.AssetManager.GetResEntry(((string)originalSoundWave.Name).ToLower()));
 
             int index = 0;
             Dispatcher?.Invoke(() => { index = tracksListBox.SelectedIndex; });
 
-            dynamic soundDataChunk = originalSoundWave.Chunks[track.ChunkIndex];
-            ChunkAssetEntry existingChunkEntry = App.AssetManager.GetChunkEntry(track.ChunkId);
+            bool chunkIsAlreadyModified = existingChunkEntry != null && existingChunkEntry.IsAdded && track.ChunkId != null && !hasStreamPool;
+            dynamic chunkToModify = chunkIsAlreadyModified || (hasStreamPool && hasExistingNewChunk) ? soundDataChunk : Activator.CreateInstance(originalSoundWave.Chunks[0].GetType());
 
-            bool chunkIsAlreadyModified = existingChunkEntry != null && existingChunkEntry.IsAdded && track.ChunkId != null;
-            dynamic chunkToModify = chunkIsAlreadyModified ? soundDataChunk : Activator.CreateInstance(originalSoundWave.Chunks[0].GetType());
-
-            chunkToModify.ChunkId = newGuid;
-            chunkToModify.ChunkSize = (uint)chunkData.Length;
+            if (!hasStreamPool || !hasExistingNewChunk)
+            {
+                chunkToModify.ChunkId = newGuid;
+                chunkToModify.ChunkSize = (uint)chunkData.Length;
+            }
+            else
+            {
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    byte[] existingChunkBytes = existingChunkData.ReadToEnd();
+                    ms.Write(existingChunkBytes, 0, existingChunkBytes.Length);
+                    ms.Write(chunkData, 0, chunkData.Length);
+                    App.AssetManager.ModifyChunk(newGuid, ms.ToArray(), CompressionType.None);
+                    chunkToModify.ChunkSize = (uint)ms.Length;
+                }
+            }
 
             ChunkAssetEntry newAssetEntry = App.AssetManager.GetChunkEntry(newGuid);
 
@@ -727,7 +783,7 @@ namespace SoundEditorPlugin
                 // add the new chunk to the existing bundles
                 newAssetEntry.AddToBundles(existingChunkEntry.AddedBundles);
             }
-            else
+            else if (!hasExistingNewChunk)
             {
                 originalSoundWave.Chunks.Add(chunkToModify);
                 chunkIndex = originalSoundWave.Chunks.Count - 1;
@@ -738,8 +794,14 @@ namespace SoundEditorPlugin
                     newAssetEntry.AddToSuperBundle(sb);
                 }
 
+                foreach (var sb in existingChunkEntry.AddedSuperBundles)
+                {
+                    newAssetEntry.AddToSuperBundle(sb);
+                }
+
                 // add the new chunk to the existing bundles
                 newAssetEntry.AddToBundles(existingChunkEntry.Bundles);
+                newAssetEntry.AddToBundles(existingChunkEntry.AddedBundles);
             }
 
             if (track.SegmentIndex > -1)

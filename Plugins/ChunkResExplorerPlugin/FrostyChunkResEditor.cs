@@ -1,16 +1,18 @@
-﻿using FrostySdk.Interfaces;
+﻿using Frosty.Core;
+using Frosty.Core.Controls;
+using Frosty.Core.Windows;
+using FrostySdk.Interfaces;
 using FrostySdk.IO;
 using FrostySdk.Managers;
+using FrostySdk.Managers.Entries;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using Frosty.Core.Controls;
-using Frosty.Core.Windows;
-using Frosty.Core;
 using System.Windows.Media;
-using FrostySdk.Managers.Entries;
 
 namespace ChunkResEditorPlugin
 {
@@ -344,7 +346,7 @@ namespace ChunkResEditorPlugin
                     using (NativeWriter writer = new NativeWriter(new FileStream(sfd.FileName, FileMode.Create)))
                     {
                         // write res meta first
-                        writer.Write(selectedAsset.ResMeta);
+                        writer.Write(selectedAsset.HasModifiedData && selectedAsset.ModifiedEntry.ResMeta != null ? selectedAsset.ModifiedEntry.ResMeta : selectedAsset.ResMeta);
 
                         // followed by remaining data
                         using (NativeReader reader = new NativeReader(resStream))
@@ -357,25 +359,65 @@ namespace ChunkResEditorPlugin
 
         public void ImportChunk()
         {
-            ChunkAssetEntry selectedAsset = chunksListBox.SelectedItem as ChunkAssetEntry;
-            FrostyOpenFileDialog ofd = new FrostyOpenFileDialog("Open Chunk", "*.chunk (Chunk Files)|*.chunk", "Chunk");
+            IList<ChunkAssetEntry> selectedChunks = chunksListBox.SelectedItems.Cast<ChunkAssetEntry>().ToList();
+
+            if (selectedChunks.Count == 0)
+            {
+                logger?.Log("[Core] No chunks selected for import.");
+                return;
+            }
+
+            FrostyOpenFileDialog ofd = new FrostyOpenFileDialog("Open Chunk", "*.chunk (Chunk Files)|*.chunk", "Chunk")
+            {
+                Multiselect = true
+            };
 
             if (ofd.ShowDialog())
             {
-                FrostyTaskWindow.Show("Importing Chunk", "", (task) =>
+                // Assuming you have a method to derive a file identifier from a ChunkAssetEntry
+                // For example, if chunks are named after their IDs or have a unique name property you can match against
+                Dictionary<string, ChunkAssetEntry> chunkDict = selectedChunks.ToDictionary(c => c.Id.ToString().ToLower(), c => c);
+
+                foreach (var fileName in ofd.FileNames)
                 {
-                    using (NativeReader reader = new NativeReader(new FileStream(ofd.FileName, FileMode.Open, FileAccess.Read)))
+                    // Derive the fileKey from the fileName, assuming the fileName contains the chunk's ID or name
+                    string fileKey = Path.GetFileNameWithoutExtension(fileName).ToLower();
+
+                    if (chunkDict.ContainsKey(fileKey))
                     {
-                        byte[] buffer = reader.ReadToEnd();
-                        App.AssetManager.ModifyChunk(selectedAsset.Id, buffer);
+                        ChunkAssetEntry matchedChunk = chunkDict[fileKey];
+                        logger?.Log("[Core] Attempting to import file: {0}", fileName);
+
+                        FrostyTaskWindow.Show("Importing Chunk", "", (task) =>
+                        {
+                            using (NativeReader reader = new NativeReader(new FileStream(fileName, FileMode.Open, FileAccess.Read)))
+                            {
+                                byte[] buffer = reader.ReadToEnd();
+                                App.AssetManager.ModifyChunk(matchedChunk.Id, buffer);
+                            }
+                        });
+
+                        logger?.Log("{0} imported to {1}", fileName, matchedChunk.Id); // Adjust logging as needed
                     }
-                });
-                RefreshChunksListBox(selectedAsset);
+                    else
+                    {
+                        logger?.Log("[Core] No matching chunk found for file: {0}", fileName);
+                    }
+                }
+                RefreshChunksListBox(null); // Refresh logic as needed
             }
         }
 
         public void ExportChunk()
         {
+            IList<ChunkAssetEntry> selectedChunks = chunksListBox.SelectedItems.Cast<ChunkAssetEntry>().ToList();
+
+            if (selectedChunks.Count == 0)
+            {
+                logger?.Log("[Core] No chunks selected for export.");
+                return;
+            }
+
             ChunkAssetEntry selectedAsset = chunksListBox.SelectedItem as ChunkAssetEntry;
             FrostySaveFileDialog sfd = new FrostySaveFileDialog("Save Chunk", "*.chunk (Chunk Files)|*.chunk", "Chunk", selectedAsset.Filename);
 
