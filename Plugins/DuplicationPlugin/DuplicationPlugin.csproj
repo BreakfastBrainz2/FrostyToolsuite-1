@@ -59,7 +59,6 @@
     </ProjectReference>
     <ProjectReference Include="..\AtlasTexturePlugin\AtlasTexturePlugin.csproj" />
     <ProjectReference Include="..\MeshSetPlugin\MeshSetPlugin.csproj" />
-	<ProjectReference Include="..\SoundEditorPlugin\SoundEditorPlugin.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -80,10 +80,5 @@ namespace SoundEditorPlugin.Helpers
             stream.Dispose();
             _semaphore.Release();
         }
-        public async Task WaitForSemaphore()
-        {
-            await _semaphore.WaitAsync();
-            _semaphore.Release();
-        }
     }
 }

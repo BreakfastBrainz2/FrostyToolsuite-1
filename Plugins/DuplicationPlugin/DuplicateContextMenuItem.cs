@@ -4,7 +4,6 @@ using Frosty.Controls;
 using Frosty.Core;
 using Frosty.Core.Viewport;
 using Frosty.Core.Windows;
-using Frosty.Hash;
 using FrostySdk;
 using FrostySdk.Ebx;
 using FrostySdk.IO;
@@ -12,7 +11,7 @@ using FrostySdk.Managers;
 using FrostySdk.Managers.Entries;
 using FrostySdk.Resources;
 using MeshSetPlugin.Resources;
-using SoundEditorPlugin.Resources;
+//using SoundEditorPlugin.Resources;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -64,54 +63,6 @@ namespace DuplicationPlugin
             App.AssetManager.ModifyRes(newResEntry.Name, newTexture);
 
             return newEntry;
-        }
-    }
-
-    public class NewWaveExtension : DuplicateAssetExtension
-    {
-        public override string AssetType => "NewWaveAsset";
-
-        public override EbxAssetEntry DuplicateAsset(EbxAssetEntry entry, string newName, bool createNew, Type newType)
-        {
-            EbxAssetEntry refEntry = base.DuplicateAsset(entry, newName, createNew, newType);
-            ResAssetEntry res = App.AssetManager.GetResEntry(entry.Name.ToLower());
-            ResAssetEntry newRes = DuplicateRes(res, refEntry.Name.ToLower(), ResourceType.NewWaveResource);
-
-            EbxAsset refAsset = App.AssetManager.GetEbx(refEntry);
-            EbxAsset origAsset = App.AssetManager.GetEbx(entry);
-            dynamic refRoot = refAsset.RootObject;
-
-            NewWaveResource newWave = App.AssetManager.GetResAs<NewWaveResource>(newRes);
-            foreach (dynamic chk in refRoot.Chunks)
-            {
-                ChunkAssetEntry soundChunk = App.AssetManager.GetChunkEntry(chk.ChunkId);
-                ChunkAssetEntry newSoundChunk = DuplicateChunk(soundChunk, CompressionType.None);
-
-                newRes.LinkAsset(newSoundChunk);
-                int trackChunk = newWave.Chunks.FindIndex(chunk => chunk.ChunkId == chk.ChunkId);
-                if (trackChunk != -1)
-                {
-                    newWave.Chunks[trackChunk].ChunkId = newSoundChunk.Id;
-                }
-                chk.ChunkId = newSoundChunk.Id;
-            }
-
-            newWave.BankKey = (uint)Fnv1.HashString(refAsset.RootInstanceGuid.ToString().Replace("{", "").Replace("}", "").Replace("\"", ""));
-
-            foreach (NewWaveResource.Dset dataSet in newWave.Dsets)
-            {
-                dataSet.DsetKey = newWave.BankKey;
-            }
-
-            App.AssetManager.ModifyRes(newRes.Name, newWave);
-
-
-            refEntry.LinkAsset(newRes);
-
-            App.AssetManager.ModifyEbx(refEntry.Name, refAsset);
-
-
-            return refEntry;
         }
     }
 
@@ -477,6 +428,38 @@ namespace DuplicationPlugin
         }
     }
 
+    //public class NewWaveExtension : DuplicateAssetExtension
+    //{
+    //    public override string AssetType => "NewWaveAsset";
+
+    //    public override EbxAssetEntry DuplicateAsset(EbxAssetEntry entry, string newName, bool createNew, Type newType)
+    //    {
+    //        // Duplicate the ebx
+    //        EbxAssetEntry newEntry = base.DuplicateAsset(entry, newName, createNew, newType);
+    //        EbxAsset newAsset = App.AssetManager.GetEbx(newEntry);
+    //        dynamic newRoot = newAsset.RootObject;
+
+    //        //Duplicate res
+    //        ResAssetEntry resEntry = App.AssetManager.GetResEntry(entry.Name.ToLower());
+    //        ResAssetEntry newRes = DuplicateRes(resEntry, newName.ToLower(), ResourceType.NewWaveResource);
+    //        NewWaveResource newWave = App.AssetManager.GetResAs<NewWaveResource>(newRes);
+
+    //        // Duplicate the chunks
+    //        for (int i = 0; i < newRoot.Chunks.Count; i++)
+    //        {
+    //            ChunkAssetEntry soundChunk = App.AssetManager.GetChunkEntry(newRoot.Chunks[i].ChunkId);
+    //            Guid chunkId = DuplicateChunk(soundChunk);
+
+    //            newRoot.Chunks[i].ChunkId = chunkId;
+    //            newWave.Chunks[i].ChunkId = chunkId;
+    //        }
+
+    //        App.AssetManager.ModifyEbx(newEntry.Name, newAsset);
+
+    //        return newEntry;
+    //    }
+    //}
+
     public class BlueprintBundleExtension : DuplicateAssetExtension
     {
         public override string AssetType => "BlueprintBundle";
@@ -645,61 +628,21 @@ namespace DuplicationPlugin
             App.Logger.Log(string.Format("Duped chunk {0} to {1}", entry.Name, newGuid));
             return newEntry;
         }
-
-        public static ChunkAssetEntry DuplicateChunk(ChunkAssetEntry entry, CompressionType compressType, Texture texture = null)
-        {
-            byte[] random = new byte[16];
-            RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
-            while (true)
-            {
-                rng.GetBytes(random);
-
-                random[15] |= 1;
-
-                if (App.AssetManager.GetChunkEntry(new Guid(random)) == null)
-                {
-                    break;
-                }
-                else
-                {
-                    App.Logger.Log("Randomised onto old guid: " + random.ToString());
-                }
-            }
-            Guid newGuid;
-            using (NativeReader reader = new NativeReader(App.AssetManager.GetChunk(entry)))
-            {
-                newGuid = App.AssetManager.AddChunk(reader.ReadToEnd(), compressType, new Guid(random), texture, entry.EnumerateBundles().ToArray());
-            }
-
-            ChunkAssetEntry newEntry = App.AssetManager.GetChunkEntry(newGuid);
-
-            foreach (int sbid in entry.SuperBundles.ToArray())
-            {
-                newEntry.AddToSuperBundle(sbid);
-            }
-
-            App.Logger.Log(string.Format("Duped chunk {0} to {1}", entry.Name, newGuid));
-            return newEntry;
-        }
-
         public static ResAssetEntry DuplicateRes(ResAssetEntry entry, string name, ResourceType resType)
         {
             if (App.AssetManager.GetResEntry(name) == null)
             {
                 ResAssetEntry newEntry;
-                byte[] newMeta = new byte[entry.ResMeta.Length];
-                Array.Copy(entry.ResMeta, newMeta, entry.ResMeta.Length);
-
                 using (NativeReader reader = new NativeReader(App.AssetManager.GetRes(entry)))
                 {
                     if (dupeResult == true)
                     {
-                        newEntry = App.AssetManager.AddRes(name, resType, newMeta, reader.ReadToEnd(), entry.EnumerateBundles().ToArray());
+                        newEntry = App.AssetManager.AddRes(name, resType, entry.ResMeta, reader.ReadToEnd(), entry.EnumerateBundles().ToArray());
                     }
                     else
                     {
-                        newEntry = App.AssetManager.AddRes(name, resType, newMeta, reader.ReadToEnd());
-                    }
+                        newEntry = App.AssetManager.AddRes(name, resType, entry.ResMeta, reader.ReadToEnd());
+                    }  
                 }
 
                 App.Logger.Log(string.Format("Duped res {0} to {1}", entry.Name, newEntry.Name));
