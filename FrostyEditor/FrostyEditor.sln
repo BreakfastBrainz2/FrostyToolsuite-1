@@ -131,6 +131,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GW2BundleManagerPlugin", ".
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProjectMerger", "..\Plugins\FrostyProjectMerger\ProjectMerger.csproj", "{742ADCAE-F062-C8D3-6DCC-E962E85851D7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProjectUpdaterPlugin", "..\Plugins\ProjectUpdaterPlugin\ProjectUpdaterPlugin.csproj", "{2842AED3-2419-7E58-D598-BEB3DC73FCA6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RimeWidgetBlueprintEditor", "..\Plugins\RimeWidgetBlueprintEditor\RimeWidgetBlueprintEditor.csproj", "{973CC29C-0845-EEED-EE19-AC2943057D93}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Developer - Debug|x64 = Developer - Debug|x64
@@ -670,6 +674,26 @@ Global
 		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release - Final|x64.Build.0 = Release - Final|x64
 		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release|x64.ActiveCfg = Release - Alpha|x64
 		{742ADCAE-F062-C8D3-6DCC-E962E85851D7}.Release|x64.Build.0 = Release - Alpha|x64
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6}.Developer - Debug|x64.ActiveCfg = Developer - Debug|x64
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6}.Developer - Debug|x64.Build.0 = Developer - Debug|x64
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6}.Release - Alpha|x64.ActiveCfg = Release - Alpha|x64
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6}.Release - Alpha|x64.Build.0 = Release - Alpha|x64
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6}.Release - Beta|x64.ActiveCfg = Release - Beta|x64
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6}.Release - Beta|x64.Build.0 = Release - Beta|x64
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6}.Release - Final|x64.ActiveCfg = Release - Final|x64
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6}.Release - Final|x64.Build.0 = Release - Final|x64
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6}.Release|x64.ActiveCfg = Release - Alpha|x64
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6}.Release|x64.Build.0 = Release - Alpha|x64
+		{973CC29C-0845-EEED-EE19-AC2943057D93}.Developer - Debug|x64.ActiveCfg = Developer|x64
+		{973CC29C-0845-EEED-EE19-AC2943057D93}.Developer - Debug|x64.Build.0 = Developer|x64
+		{973CC29C-0845-EEED-EE19-AC2943057D93}.Release - Alpha|x64.ActiveCfg = Release|x64
+		{973CC29C-0845-EEED-EE19-AC2943057D93}.Release - Alpha|x64.Build.0 = Release|x64
+		{973CC29C-0845-EEED-EE19-AC2943057D93}.Release - Beta|x64.ActiveCfg = Release|x64
+		{973CC29C-0845-EEED-EE19-AC2943057D93}.Release - Beta|x64.Build.0 = Release|x64
+		{973CC29C-0845-EEED-EE19-AC2943057D93}.Release - Final|x64.ActiveCfg = Release|x64
+		{973CC29C-0845-EEED-EE19-AC2943057D93}.Release - Final|x64.Build.0 = Release|x64
+		{973CC29C-0845-EEED-EE19-AC2943057D93}.Release|x64.ActiveCfg = Release|x64
+		{973CC29C-0845-EEED-EE19-AC2943057D93}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -720,6 +744,8 @@ Global
 		{CAA3EA60-4117-DC11-5F4F-6C0825DAD8E5} = {492048B6-848D-4675-A9BF-34A4751303F2}
 		{177574DE-1B32-4C3E-B1E7-E439649EE6EA} = {492048B6-848D-4675-A9BF-34A4751303F2}
 		{742ADCAE-F062-C8D3-6DCC-E962E85851D7} = {492048B6-848D-4675-A9BF-34A4751303F2}
+		{2842AED3-2419-7E58-D598-BEB3DC73FCA6} = {492048B6-848D-4675-A9BF-34A4751303F2}
+		{973CC29C-0845-EEED-EE19-AC2943057D93} = {492048B6-848D-4675-A9BF-34A4751303F2}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C0B22EF1-4C3F-45B9-9F08-9793ED912199}
