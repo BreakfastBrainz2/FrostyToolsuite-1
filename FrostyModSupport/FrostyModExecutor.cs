@@ -276,14 +276,17 @@ namespace Frosty.ModSupport
                             bundleHashMap.Add(HashBundle(be), be.Name);
                     }
                     writer.WriteLine("Modified Bundles:");
-                    
+
                     List<int> bundles = m_modifiedBundles.Keys.ToList();
                     bundles.Sort();
 
                     foreach (int hash in bundles)
                     {
                         var kv = m_modifiedBundles[hash];
-                        writer.WriteLine($"  {bundleHashMap[hash]}:");
+                        string bundleName = bundleHashMap.ContainsKey(hash)
+                                          ? bundleHashMap[hash]
+                                          : $"NewBundle_0x{hash:X8}";
+                        writer.WriteLine($"  {bundleName}:");
 
                         if (kv.Modify.Ebx.Count > 0)
                         {
@@ -854,7 +857,7 @@ namespace Frosty.ModSupport
                         case ModResourceType.Chunk: modBundle.Modify.AddChunk(new Guid(resource.Name)); break;
                     }
                 }
-                label_add_bundles:
+            label_add_bundles:
                 // add bundle actions (these are stored in the mod)
                 foreach (int bundleHash in resource.AddedBundles)
                 {
@@ -987,10 +990,10 @@ namespace Frosty.ModSupport
                         if (existingEntry.Sha1 == resource.GetValue<Sha1>("sha1"))
                             continue;
 
-                                if (!m_archiveData.ContainsKey(existingEntry.Sha1))
-                                {
-                                    return;
-                                }
+                        if (!m_archiveData.ContainsKey(existingEntry.Sha1))
+                        {
+                            return;
+                        }
 
                         m_archiveData[existingEntry.Sha1].RefCount--;
                         if (m_archiveData[existingEntry.Sha1].RefCount == 0)
@@ -1044,10 +1047,10 @@ namespace Frosty.ModSupport
                         if (existingEntry.Sha1 == resource.GetValue<Sha1>("sha1"))
                             continue;
 
-                                if (!m_archiveData.ContainsKey(existingEntry.Sha1))
-                                {
-                                    return;
-                                }
+                        if (!m_archiveData.ContainsKey(existingEntry.Sha1))
+                        {
+                            return;
+                        }
 
                         m_archiveData[existingEntry.Sha1].RefCount--;
                         if (m_archiveData[existingEntry.Sha1].RefCount == 0)
@@ -1411,7 +1414,7 @@ namespace Frosty.ModSupport
 
                 // process any new resources added during custom handler modification
                 ProcessModResources(runtimeResources);
-				
+
 #if FROSTY_DEVELOPER
                 PrintLog();
 #endif
@@ -1511,7 +1514,7 @@ namespace Frosty.ModSupport
                         }
                     }
                 }
-				
+
                 // if there is a gamedir/shadercache (or shader_cache) folder, symlink it
                 if (Directory.Exists(Path.Combine(m_fs.BasePath, "shadercache")))
                 {
@@ -1608,11 +1611,11 @@ namespace Frosty.ModSupport
 
                         while (File.Exists(path))
                         {
-                            casIndex++;                           
+                            casIndex++;
                             path = m_fs.BasePath + m_patchPath + "\\" + catalog + "\\cas_" + casIndex.ToString("D2") + ".cas";
 
                             // check if it skips 1 and do a double jump this iteration
-                            if(!File.Exists(path))
+                            if (!File.Exists(path))
                             {
                                 path = m_fs.BasePath + m_patchPath + "\\" + catalog + "\\cas_" + (casIndex + 1).ToString("D2") + ".cas";
                                 if (File.Exists(path))
@@ -1629,6 +1632,14 @@ namespace Frosty.ModSupport
                     ManualResetEvent doneEvent = new ManualResetEvent(false);
 
                     // @todo: Added bundles
+#if DEBUG
+                    Debug.WriteLine($"[DEBUG-ADD-DUMP] m_addedBundles has {m_addedBundles.Count} superbundle key(s).");
+                    foreach (var kvp in m_addedBundles)
+                    {
+                        foreach (string bn in kvp.Value)
+                            Debug.WriteLine($"[DEBUG-ADD-DUMP]   SbId={kvp.Key}  Bundle='{bn}'");
+                    }
+#endif
 
                     int totalTasks = 0;
                     foreach (SuperBundleInfo superBundle in m_fs.EnumerateSuperBundleInfos())
@@ -1636,6 +1647,10 @@ namespace Frosty.ModSupport
                         if (m_fs.ResolvePath(superBundle.Name + ".toc") == "")
                             continue;
 
+#if DEBUG
+                        int dbgSbId = m_am.GetSuperBundleId(superBundle.Name);
+                        Debug.WriteLine($"[DEBUG-ADD-DUMP] Dispatching '{superBundle.Name}' -> GetSuperBundleId={dbgSbId}");
+#endif
                         CasBundleAction action = new CasBundleAction(superBundle, doneEvent, this);
                         ThreadPool.QueueUserWorkItem(action.ThreadPoolCallback, null);
                         actions.Add(action);
