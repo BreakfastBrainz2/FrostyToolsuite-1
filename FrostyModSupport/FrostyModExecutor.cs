@@ -421,14 +421,32 @@ namespace Frosty.ModSupport
                     BundleEntry bEntry = new BundleEntry();
                     resource.FillAssetEntry(bEntry);
 
-                    m_addedBundles.TryAdd(bEntry.SuperBundleId, new HashSet<string>());
+                    // Resolve the correct superbundle ID by matching the bundle's path prefix
+                    // with an existing bundle that lives in the same superbundle?
+                    string lowerName = bEntry.Name.ToLower();
+                    int secondSlash = lowerName.IndexOf('/', lowerName.IndexOf('/') + 1);
+                    string prefix = secondSlash >= 0 ? lowerName.Substring(0, secondSlash + 1) : lowerName;
 
-                    HashSet<string> addedBundlesSet = m_addedBundles[bEntry.SuperBundleId];
-                    lock (addedBundlesSet)
+                    int resolvedSbId = -1;
+                    foreach (BundleEntry existing in m_am.EnumerateBundles())
                     {
-                        addedBundlesSet.Add(bEntry.Name);
+                        if (existing.Name.ToLower().StartsWith(prefix))
+                        {
+                            resolvedSbId = existing.SuperBundleId;
+                            break;
+                        }
                     }
 
+                    if (resolvedSbId == -1)
+                    {
+                        m_logger?.Log($"[WARN] Could not resolve superbundle for added bundle '{bEntry.Name}', skipping.");
+                        return;   // inside the Parallel.ForEach lambda, simply returns from this iteration
+                    }
+
+                    m_addedBundles.TryAdd(resolvedSbId, new HashSet<string>());
+                    HashSet<string> addedBundlesSet = m_addedBundles[resolvedSbId];
+                    lock (addedBundlesSet)
+                        addedBundlesSet.Add(bEntry.Name);
                 }
                 else if (resource.Type == ModResourceType.Ebx)
                 {

@@ -164,6 +164,45 @@ namespace Frosty.ModSupport
 
                     // reading in unmodified data and modifying it
                     {
+                        // Ensure tocFlags accurately reflects the SuperBundle's format (Inline Sb / Inline Bundles)
+                        // before processing any added/modified bundles, by legitimately parsing the first available bundle header.
+                        if (bundles.Count > 0)
+                        {
+                            BundleInfo firstBundle = bundles.Values.First();
+                            long offset = firstBundle.Offset;
+                            uint size = firstBundle.Size;
+
+                            if ((size & 0xC0000000) == 0x40000000)
+                            {
+                                tocFlags |= InternalFlags.HasInlineSb;
+                                HasSb = false;
+                                size &= ~0xC0000000;
+                                offset += 0x22C;
+                            }
+
+                            string readerPath = firstBundle.IsPatch
+                                ? (tocFlags.HasFlag(InternalFlags.HasInlineSb) ? $"native_patch/{firstBundle.SbName}.toc" : $"native_patch/{firstBundle.SbName}.sb")
+                                : (tocFlags.HasFlag(InternalFlags.HasInlineSb) ? $"native_data/{firstBundle.SbName}.toc" : $"native_data/{firstBundle.SbName}.sb");
+
+                            string resolvedPath = parent.m_fs.ResolvePath(readerPath);
+                            if (!string.IsNullOrEmpty(resolvedPath))
+                            {
+                                using (NativeReader initReader = new NativeReader(new FileStream(resolvedPath, FileMode.Open, FileAccess.Read), parent.m_fs.CreateDeobfuscator()))
+                                {
+                                    using (Stream stream = initReader.CreateViewStream(offset, size))
+                                    using (BinarySbReader initBundleReader = new BinarySbReader(stream, parent.m_fs.CreateDeobfuscator()))
+                                    {
+                                        int bundleOffset = initBundleReader.ReadInt(Endian.Big);
+                                        int bundleSize = initBundleReader.ReadInt(Endian.Big);
+                                        if (!(bundleOffset == 0 && bundleSize == 0))
+                                        {
+                                            tocFlags |= InternalFlags.HasInlineBundle;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         string patchSbPath = "";
                         string baseSbPath = "";
                         NativeReader reader = null;
@@ -653,356 +692,308 @@ namespace Frosty.ModSupport
                                 modWriter.Position = modWriter.Length;
                                 bundleInfo.Size = size;
                             }
+                        }
 
-                            // Added bundles for this superbundle
+                        // Added bundles for this superbundle
+                        {
+                            int addedsbId = parent.m_am.GetSuperBundleId(SuperBundleInfo.Name);
+                            parent.Logger.Log($"[DEBUG-ADD] Checking superbundle '{SuperBundleInfo.Name}' (ID {addedsbId}) for added bundles.");
+
+                            if (parent.m_addedBundles.TryGetValue(addedsbId, out HashSet<string> addedBundleNames) && addedBundleNames.Count > 0)
                             {
-                                int addedsbId = parent.m_am.GetSuperBundleId(SuperBundleInfo.Name);
-                                parent.Logger.Log($"[DEBUG-ADD] Checking superbundle '{SuperBundleInfo.Name}' (ID {addedsbId}) for added bundles.");
+                                parent.Logger.Log($"[DEBUG-ADD] Superbundle '{SuperBundleInfo.Name}' has {addedBundleNames.Count} added bundle(s).");
 
-                                HashSet<string> allAddedBundles = new HashSet<string>();
-
-                                // 1. Normal added bundles for this superbundle
-                                if (parent.m_addedBundles.TryGetValue(addedsbId, out HashSet<string> addedBundleNames))
+                                foreach (string bundleName in addedBundleNames)
                                 {
-                                    foreach (var bn in addedBundleNames)
-                                        allAddedBundles.Add(bn);
-                                }
+                                    int addedBundleHash = Fnv1.HashString(bundleName.ToLower());
 
-                                // TEMPORARY TEST: force orphaned bundle 292778859 into weaponsandattachments
-                                if (SuperBundleInfo.Name.Equals("win32/weaponsandattachments", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    if (parent.m_addedBundles.TryGetValue(292778859, out HashSet<string> forcedBundles))
+                                    if (!parent.m_modifiedBundles.TryGetValue(addedBundleHash, out ModBundleInfo modBundle))
                                     {
-                                        foreach (var bn in forcedBundles)
-                                            allAddedBundles.Add(bn);
-                                        parent.Logger.Log($"[DEBUG-ADD] (TEST) Forced bundle(s) from orphan SbId 292778859 into weaponsandattachments.");
+                                        parent.Logger.Log($"[DEBUG-ADD] No asset registrations found for bundle '{bundleName}', skipping.");
+                                        continue;
                                     }
-                                }
 
-                                // 2. Orphaned bundles (no matching superbundle ID) -> absorb into win32/globals
-                                if (SuperBundleInfo.Name.Equals("win32/globals", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    foreach (var kvp in parent.m_addedBundles)
+                                    parent.Logger.Log($"[DEBUG-ADD] Writing added bundle '{bundleName}' with {modBundle.Add.Ebx.Count} EBX, {modBundle.Add.Res.Count} Res, {modBundle.Add.Chunks.Count} Chunks.");
+
+                                    // Use default catalog
+                                    string catalog = m_catalog;
+                                    byte catalogIndex = (byte)parent.m_fs.GetCatalogIndex(catalog);
+                                    isDefaultTocModified = true;
+                                    modWriter = modDefaultWriter;
+
+                                    // Build bundle object
+                                    DbObject bundleObj = new DbObject();
+                                    bundleObj.AddValue("ebx", DbObject.CreateList());
+                                    bundleObj.AddValue("res", DbObject.CreateList());
+                                    bundleObj.AddValue("chunks", DbObject.CreateList());
+                                    bundleObj.AddValue("chunkMeta", DbObject.CreateList());
+
+                                    // Write EBX assets
+                                    foreach (string name in modBundle.Add.Ebx)
                                     {
-                                        if (kvp.Key != addedsbId) // not already claimed
+                                        EbxAssetEntry entry = parent.m_modifiedEbx[name];
+
+                                        if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
                                         {
-                                            bool isOrphaned = true;
-                                            foreach (var sb in parent.m_fs.EnumerateSuperBundleInfos())
+                                            casWriter?.Close();
+                                            casWriter = GetNextCas(catalog, out casFileIndex);
+                                        }
+
+                                        DbObject ebx = new DbObject();
+                                        ebx.SetValue("name", entry.Name);
+                                        ebx.SetValue("sha1", entry.Sha1);
+                                        ebx.SetValue("originalSize", entry.OriginalSize);
+                                        ebx.SetValue("size", entry.Size);
+                                        ebx.SetValue("catalog", catalogIndex);
+                                        ebx.SetValue("cas", casFileIndex);
+                                        ebx.SetValue("offset", (int)casWriter.Position);
+                                        if (parent.m_hasPatchFolder)
+                                            ebx.SetValue("patch", true);
+
+                                        bundleObj.GetValue<DbObject>("ebx").Add(ebx);
+                                        casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
+                                    }
+
+                                    // Write Res assets
+                                    foreach (string name in modBundle.Add.Res)
+                                    {
+                                        ResAssetEntry entry = parent.m_modifiedRes[name];
+
+                                        if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
+                                        {
+                                            casWriter?.Close();
+                                            casWriter = GetNextCas(catalog, out casFileIndex);
+                                        }
+
+                                        DbObject res = new DbObject();
+                                        res.SetValue("name", entry.Name);
+                                        res.SetValue("sha1", entry.Sha1);
+                                        res.SetValue("originalSize", entry.OriginalSize);
+                                        res.SetValue("size", entry.Size);
+                                        res.SetValue("catalog", catalogIndex);
+                                        res.SetValue("cas", casFileIndex);
+                                        res.SetValue("offset", (int)casWriter.Position);
+                                        res.SetValue("resRid", (long)entry.ResRid);
+                                        res.SetValue("resMeta", entry.ResMeta);
+                                        res.SetValue("resType", (int)entry.ResType);
+                                        if (parent.m_hasPatchFolder)
+                                            res.SetValue("patch", true);
+
+                                        bundleObj.GetValue<DbObject>("res").Add(res);
+                                        casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
+                                    }
+
+                                    // Write Chunk assets
+                                    DbObject chunkMeta = bundleObj.GetValue<DbObject>("chunkMeta");
+                                    foreach (Guid chunkId in modBundle.Add.Chunks)
+                                    {
+                                        ChunkAssetEntry entry = parent.m_modifiedChunks[chunkId];
+                                        byte[] data = parent.m_archiveData[entry.Sha1].Data;
+
+                                        if (entry.LogicalOffset != 0)
+                                        {
+                                            data = new byte[entry.RangeEnd - entry.RangeStart];
+                                            Array.Copy(parent.m_archiveData[entry.Sha1].Data, entry.RangeStart, data, 0, data.Length);
+                                        }
+
+                                        if (casWriter == null || casWriter.Length + data.Length > 1073741824)
+                                        {
+                                            casWriter?.Close();
+                                            casWriter = GetNextCas(catalog, out casFileIndex);
+                                        }
+
+                                        uint chunkOffset = (uint)casWriter.Position;
+
+                                        DbObject chunk = new DbObject();
+                                        chunk.SetValue("id", chunkId);
+                                        chunk.SetValue("sha1", entry.Sha1);
+                                        chunk.SetValue("originalSize", entry.OriginalSize);
+                                        chunk.SetValue("size", data.Length);
+                                        chunk.SetValue("catalog", catalogIndex);
+                                        chunk.SetValue("cas", casFileIndex);
+                                        chunk.SetValue("offset", chunkOffset);
+                                        chunk.SetValue("logicalOffset", (int)entry.LogicalOffset);
+                                        chunk.SetValue("logicalSize", (int)entry.LogicalSize);
+                                        if (parent.m_hasPatchFolder)
+                                            chunk.SetValue("patch", true);
+
+                                        DbObject meta = new DbObject();
+                                        meta.SetValue("h32", entry.H32);
+                                        meta.SetValue("meta", new DbObject());
+                                        if (entry.FirstMip != -1)
+                                            meta.GetValue<DbObject>("meta").SetValue("firstMip", entry.FirstMip);
+                                        chunkMeta.Add(meta);
+
+                                        bundleObj.GetValue<DbObject>("chunks").Add(chunk);
+                                        casWriter.Write(data);
+
+                                        // Register chunk in the SuperBundle's TOC chunks dictionary
+                                        if (!chunks.ContainsKey(chunkId))
+                                        {
+                                            ChunkInfo chunkInfo = new ChunkInfo()
                                             {
-                                                if (parent.m_am.GetSuperBundleId(sb.Name) == kvp.Key)
+                                                Guid = chunkId,
+                                                SplitIndex = -1,
+                                                SbName = SuperBundleInfo.Name,
+                                                IsPatch = true,
+                                                CasFileInfo = new CasFileInfo()
                                                 {
-                                                    isOrphaned = false;
-                                                    break;
+                                                    IsPatch = parent.m_hasPatchFolder,
+                                                    CatalogIndex = catalogIndex,
+                                                    CasIndex = (byte)casFileIndex,
+                                                    Offset = chunkOffset,
+                                                    Size = (uint)data.Length
                                                 }
-                                            }
-
-                                            if (isOrphaned)
-                                            {
-                                                // skip the test bundle if we already forced it into weaponsandattachments
-                                                if (kvp.Key == 292778859) continue;
-                                                parent.Logger.Log($"[DEBUG-ADD] Absorbing orphaned BlueprintBundle(s) from SbId={kvp.Key} into {SuperBundleInfo.Name}");
-                                                foreach (var bn in kvp.Value)
-                                                    allAddedBundles.Add(bn);
-                                            }
+                                            };
+                                            chunks.Add(chunkId, chunkInfo);
                                         }
                                     }
-                                }
 
-                                if (allAddedBundles.Count > 0)
-                                {
-                                    parent.Logger.Log($"[DEBUG-ADD] Superbundle '{SuperBundleInfo.Name}' has {allAddedBundles.Count} added bundle(s).");
-
-                                    foreach (string bundleName in allAddedBundles)
+                                    // Write bundle header and location table
+                                    BundleInfo newBundleInfo = new BundleInfo
                                     {
-                                        int addedBundleHash = Fnv1.HashString(bundleName.ToLower());
+                                        Name = bundleName,
+                                        IsModified = true,
+                                        IsPatch = true,
+                                        SbName = SuperBundleInfo.Name,
+                                        SplitIndex = -1,
+                                        Offset = modWriter.Position,
+                                    };
 
-                                        if (!parent.m_modifiedBundles.TryGetValue(addedBundleHash, out ModBundleInfo modBundle))
+                                    uint newBundleOffset = 0;
+                                    uint newBundleSize = 0;
+                                    uint newLocationOffset = 0;
+                                    uint newTotalCount = (uint)(
+                                        bundleObj.GetValue<DbObject>("ebx").Count +
+                                        bundleObj.GetValue<DbObject>("res").Count +
+                                        bundleObj.GetValue<DbObject>("chunks").Count +
+                                        (tocFlags.HasFlag(InternalFlags.HasInlineBundle) ? 0 : 1));
+                                    uint newDataOffset = 0;
+
+                                    modWriter.Write(0xDEADBABE, Endian.Big); // bundleOffset
+                                    modWriter.Write(0xDEADBABE, Endian.Big); // bundleSize
+                                    modWriter.Write(0xDEADBABE, Endian.Big); // locationOffset
+                                    modWriter.Write(0xDEADBABE, Endian.Big); // totalCount
+                                    modWriter.Write(0xDEADBABE, Endian.Big); // dataOffset
+                                    modWriter.Write(0xDEADBABE, Endian.Big); // dataOffset copy
+                                    modWriter.Write(0xDEADBABE, Endian.Big); // dataOffset copy
+                                    modWriter.Write(0, Endian.Big);
+
+                                    if (tocFlags.HasFlag(InternalFlags.HasInlineBundle))
+                                    {
+                                        newBundleOffset = (uint)(modWriter.Position - newBundleInfo.Offset);
+                                        modWriter.Write(bundleObj);
+                                        newBundleSize = (uint)(modWriter.Position - newBundleOffset);
+                                    }
+
+                                    byte[] locFlags = new byte[newTotalCount];
+                                    byte locUnused = 0;
+                                    bool locPatch = false;
+                                    byte locCat = 0;
+                                    byte locCas = 0;
+                                    int lz = 0;
+
+                                    newDataOffset = (uint)(modWriter.Position - newBundleInfo.Offset);
+
+                                    if (!tocFlags.HasFlag(InternalFlags.HasInlineBundle))
+                                    {
+                                        MemoryStream ms2 = new MemoryStream();
+                                        using (BinarySbWriter subWriter = new BinarySbWriter(ms2, true, endian))
+                                            subWriter.Write(bundleObj);
+                                        byte[] bundleBuffer = ms2.ToArray();
+                                        ms2.Dispose();
+
+                                        if (casWriter == null || casWriter.Length + bundleBuffer.Length > 1073741824)
                                         {
-                                            parent.Logger.Log($"[DEBUG-ADD] No asset registrations found for bundle '{bundleName}', skipping.");
-                                            continue;
+                                            casWriter?.Close();
+                                            casWriter = GetNextCas(catalog, out casFileIndex);
                                         }
 
-                                        parent.Logger.Log($"[DEBUG-ADD] Writing added bundle '{bundleName}' with {modBundle.Add.Ebx.Count} EBX, {modBundle.Add.Res.Count} Res, {modBundle.Add.Chunks.Count} Chunks.");
+                                        locFlags[lz] = 1;
+                                        modWriter.Write(locUnused);
+                                        modWriter.Write(locPatch = parent.m_hasPatchFolder);
+                                        modWriter.Write(locCat = catalogIndex);
+                                        modWriter.Write(locCas = (byte)casFileIndex);
+                                        modWriter.Write((uint)casWriter.Position, Endian.Big);
+                                        modWriter.Write(bundleBuffer.Length, Endian.Big);
+                                        lz++;
+                                        casWriter.Write(bundleBuffer);
+                                    }
 
-                                        // Use default catalog
-                                        string catalog = m_catalog;
-                                        byte catalogIndex = (byte)parent.m_fs.GetCatalogIndex(catalog);
-                                        isDefaultTocModified = true;
-                                        modWriter = modDefaultWriter;
-
-                                        // Build bundle object
-                                        DbObject bundleObj = new DbObject();
-                                        bundleObj.AddValue("ebx", DbObject.CreateList());
-                                        bundleObj.AddValue("res", DbObject.CreateList());
-                                        bundleObj.AddValue("chunks", DbObject.CreateList());
-                                        bundleObj.AddValue("chunkMeta", DbObject.CreateList());
-
-                                        // Write EBX assets
-                                        foreach (string name in modBundle.Add.Ebx)
+                                    foreach (DbObject ebx in bundleObj.GetValue<DbObject>("ebx"))
+                                    {
+                                        if (locPatch != ebx.HasValue("patch") || locCat != ebx.GetValue<byte>("catalog") || locCas != ebx.GetValue<byte>("cas"))
                                         {
-                                            EbxAssetEntry entry = parent.m_modifiedEbx[name];
-
-                                            if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
-                                            {
-                                                casWriter?.Close();
-                                                casWriter = GetNextCas(catalog, out casFileIndex);
-                                            }
-
-                                            DbObject ebx = new DbObject();
-                                            ebx.SetValue("name", entry.Name);
-                                            ebx.SetValue("sha1", entry.Sha1);
-                                            ebx.SetValue("originalSize", entry.OriginalSize);
-                                            ebx.SetValue("size", entry.Size);
-                                            ebx.SetValue("catalog", catalogIndex);
-                                            ebx.SetValue("cas", casFileIndex);
-                                            ebx.SetValue("offset", (int)casWriter.Position);
-                                            if (parent.m_hasPatchFolder)
-                                                ebx.SetValue("patch", true);
-
-                                            bundleObj.GetValue<DbObject>("ebx").Add(ebx);
-                                            casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
-                                        }
-
-                                        // Write Res assets
-                                        foreach (string name in modBundle.Add.Res)
-                                        {
-                                            ResAssetEntry entry = parent.m_modifiedRes[name];
-
-                                            if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
-                                            {
-                                                casWriter?.Close();
-                                                casWriter = GetNextCas(catalog, out casFileIndex);
-                                            }
-
-                                            DbObject res = new DbObject();
-                                            res.SetValue("name", entry.Name);
-                                            res.SetValue("sha1", entry.Sha1);
-                                            res.SetValue("originalSize", entry.OriginalSize);
-                                            res.SetValue("size", entry.Size);
-                                            res.SetValue("catalog", catalogIndex);
-                                            res.SetValue("cas", casFileIndex);
-                                            res.SetValue("offset", (int)casWriter.Position);
-                                            res.SetValue("resRid", (long)entry.ResRid);
-                                            res.SetValue("resMeta", entry.ResMeta);
-                                            res.SetValue("resType", (int)entry.ResType);
-                                            if (parent.m_hasPatchFolder)
-                                                res.SetValue("patch", true);
-
-                                            bundleObj.GetValue<DbObject>("res").Add(res);
-                                            casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
-                                        }
-
-                                        // Write Chunk assets
-                                        DbObject chunkMeta = bundleObj.GetValue<DbObject>("chunkMeta");
-                                        foreach (Guid chunkId in modBundle.Add.Chunks)
-                                        {
-                                            ChunkAssetEntry entry = parent.m_modifiedChunks[chunkId];
-                                            byte[] data = parent.m_archiveData[entry.Sha1].Data;
-
-                                            if (entry.LogicalOffset != 0)
-                                            {
-                                                data = new byte[entry.RangeEnd - entry.RangeStart];
-                                                Array.Copy(parent.m_archiveData[entry.Sha1].Data, entry.RangeStart, data, 0, data.Length);
-                                            }
-
-                                            if (casWriter == null || casWriter.Length + data.Length > 1073741824)
-                                            {
-                                                casWriter?.Close();
-                                                casWriter = GetNextCas(catalog, out casFileIndex);
-                                            }
-
-                                            uint chunkOffset = (uint)casWriter.Position;
-
-                                            DbObject chunk = new DbObject();
-                                            chunk.SetValue("id", chunkId);
-                                            chunk.SetValue("sha1", entry.Sha1);
-                                            chunk.SetValue("originalSize", entry.OriginalSize);
-                                            chunk.SetValue("size", data.Length);
-                                            chunk.SetValue("catalog", catalogIndex);
-                                            chunk.SetValue("cas", casFileIndex);
-                                            chunk.SetValue("offset", chunkOffset);
-                                            chunk.SetValue("logicalOffset", (int)entry.LogicalOffset);
-                                            chunk.SetValue("logicalSize", (int)entry.LogicalSize);
-                                            if (parent.m_hasPatchFolder)
-                                                chunk.SetValue("patch", true);
-
-                                            DbObject meta = new DbObject();
-                                            meta.SetValue("h32", entry.H32);
-                                            meta.SetValue("meta", new DbObject());
-                                            if (entry.FirstMip != -1)
-                                                meta.GetValue<DbObject>("meta").SetValue("firstMip", entry.FirstMip);
-                                            chunkMeta.Add(meta);
-
-                                            bundleObj.GetValue<DbObject>("chunks").Add(chunk);
-                                            casWriter.Write(data);
-
-                                            // Register chunk in the SuperBundle's TOC chunks dictionary
-                                            if (!chunks.ContainsKey(chunkId))
-                                            {
-                                                ChunkInfo chunkInfo = new ChunkInfo()
-                                                {
-                                                    Guid = chunkId,
-                                                    SplitIndex = -1,
-                                                    SbName = SuperBundleInfo.Name,
-                                                    IsPatch = true,
-                                                    CasFileInfo = new CasFileInfo()
-                                                    {
-                                                        IsPatch = parent.m_hasPatchFolder,
-                                                        CatalogIndex = catalogIndex,
-                                                        CasIndex = (byte)casFileIndex,
-                                                        Offset = chunkOffset,
-                                                        Size = (uint)data.Length
-                                                    }
-                                                };
-                                                chunks.Add(chunkId, chunkInfo);
-                                            }
-                                        }
-
-                                        // Write bundle header and location table
-                                        BundleInfo newBundleInfo = new BundleInfo
-                                        {
-                                            Name = bundleName,
-                                            IsModified = true,
-                                            IsPatch = true,
-                                            SbName = SuperBundleInfo.Name,
-                                            SplitIndex = -1,
-                                            Offset = modWriter.Position,
-                                        };
-
-                                        uint newBundleOffset = 0;
-                                        uint newBundleSize = 0;
-                                        uint newLocationOffset = 0;
-                                        uint newTotalCount = (uint)(
-                                            bundleObj.GetValue<DbObject>("ebx").Count +
-                                            bundleObj.GetValue<DbObject>("res").Count +
-                                            bundleObj.GetValue<DbObject>("chunks").Count +
-                                            (tocFlags.HasFlag(InternalFlags.HasInlineBundle) ? 0 : 1));
-                                        uint newDataOffset = 0;
-
-                                        modWriter.Write(0xDEADBABE, Endian.Big); // bundleOffset
-                                        modWriter.Write(0xDEADBABE, Endian.Big); // bundleSize
-                                        modWriter.Write(0xDEADBABE, Endian.Big); // locationOffset
-                                        modWriter.Write(0xDEADBABE, Endian.Big); // totalCount
-                                        modWriter.Write(0xDEADBABE, Endian.Big); // dataOffset
-                                        modWriter.Write(0xDEADBABE, Endian.Big); // dataOffset copy
-                                        modWriter.Write(0xDEADBABE, Endian.Big); // dataOffset copy
-                                        modWriter.Write(0, Endian.Big);
-
-                                        if (tocFlags.HasFlag(InternalFlags.HasInlineBundle))
-                                        {
-                                            newBundleOffset = (uint)(modWriter.Position - newBundleInfo.Offset);
-                                            modWriter.Write(bundleObj);
-                                            newBundleSize = (uint)(modWriter.Position - newBundleOffset);
-                                        }
-
-                                        byte[] locFlags = new byte[newTotalCount];
-                                        byte locUnused = 0;
-                                        bool locPatch = false;
-                                        byte locCat = 0;
-                                        byte locCas = 0;
-                                        int lz = 0;
-
-                                        newDataOffset = (uint)(modWriter.Position - newBundleInfo.Offset);
-
-                                        if (!tocFlags.HasFlag(InternalFlags.HasInlineBundle))
-                                        {
-                                            MemoryStream ms2 = new MemoryStream();
-                                            using (BinarySbWriter subWriter = new BinarySbWriter(ms2, true, endian))
-                                                subWriter.Write(bundleObj);
-                                            byte[] bundleBuffer = ms2.ToArray();
-                                            ms2.Dispose();
-
-                                            if (casWriter == null || casWriter.Length + bundleBuffer.Length > 1073741824)
-                                            {
-                                                casWriter?.Close();
-                                                casWriter = GetNextCas(catalog, out casFileIndex);
-                                            }
-
                                             locFlags[lz] = 1;
                                             modWriter.Write(locUnused);
-                                            modWriter.Write(locPatch = parent.m_hasPatchFolder);
-                                            modWriter.Write(locCat = catalogIndex);
-                                            modWriter.Write(locCas = (byte)casFileIndex);
-                                            modWriter.Write((uint)casWriter.Position, Endian.Big);
-                                            modWriter.Write(bundleBuffer.Length, Endian.Big);
-                                            lz++;
-                                            casWriter.Write(bundleBuffer);
+                                            modWriter.Write(locPatch = ebx.HasValue("patch"));
+                                            modWriter.Write(locCat = ebx.GetValue<byte>("catalog"));
+                                            modWriter.Write(locCas = ebx.GetValue<byte>("cas"));
                                         }
-
-                                        foreach (DbObject ebx in bundleObj.GetValue<DbObject>("ebx"))
-                                        {
-                                            if (locPatch != ebx.HasValue("patch") || locCat != ebx.GetValue<byte>("catalog") || locCas != ebx.GetValue<byte>("cas"))
-                                            {
-                                                locFlags[lz] = 1;
-                                                modWriter.Write(locUnused);
-                                                modWriter.Write(locPatch = ebx.HasValue("patch"));
-                                                modWriter.Write(locCat = ebx.GetValue<byte>("catalog"));
-                                                modWriter.Write(locCas = ebx.GetValue<byte>("cas"));
-                                            }
-                                            modWriter.Write(ebx.GetValue<int>("offset"), Endian.Big);
-                                            modWriter.Write(ebx.GetValue<int>("size"), Endian.Big);
-                                            lz++;
-                                        }
-
-                                        foreach (DbObject res in bundleObj.GetValue<DbObject>("res"))
-                                        {
-                                            if (locPatch != res.HasValue("patch") || locCat != res.GetValue<byte>("catalog") || locCas != res.GetValue<byte>("cas"))
-                                            {
-                                                locFlags[lz] = 1;
-                                                modWriter.Write(locUnused);
-                                                modWriter.Write(locPatch = res.HasValue("patch"));
-                                                modWriter.Write(locCat = res.GetValue<byte>("catalog"));
-                                                modWriter.Write(locCas = res.GetValue<byte>("cas"));
-                                            }
-                                            modWriter.Write(res.GetValue<int>("offset"), Endian.Big);
-                                            modWriter.Write(res.GetValue<int>("size"), Endian.Big);
-                                            lz++;
-                                        }
-
-                                        foreach (DbObject chunk in bundleObj.GetValue<DbObject>("chunks"))
-                                        {
-                                            if (locPatch != chunk.HasValue("patch") || locCat != chunk.GetValue<byte>("catalog") || locCas != chunk.GetValue<byte>("cas"))
-                                            {
-                                                locFlags[lz] = 1;
-                                                modWriter.Write(locUnused);
-                                                modWriter.Write(locPatch = chunk.HasValue("patch"));
-                                                modWriter.Write(locCat = chunk.GetValue<byte>("catalog"));
-                                                modWriter.Write(locCas = chunk.GetValue<byte>("cas"));
-                                            }
-                                            modWriter.Write(chunk.GetValue<int>("offset"), Endian.Big);
-                                            modWriter.Write(chunk.GetValue<int>("size"), Endian.Big);
-                                            lz++;
-                                        }
-
-                                        newLocationOffset = (uint)(modWriter.Position - newBundleInfo.Offset);
-                                        modWriter.Write(locFlags);
-                                        uint newSize = (uint)(modWriter.Position - newBundleInfo.Offset);
-                                        modWriter.WritePadding(4);
-
-                                        // Patch back the header placeholders
-                                        modWriter.Position = newBundleInfo.Offset;
-                                        modWriter.Write(newBundleOffset, Endian.Big);
-                                        modWriter.Write(newBundleSize, Endian.Big);
-                                        modWriter.Write(newLocationOffset, Endian.Big);
-                                        modWriter.Write(newTotalCount, Endian.Big);
-                                        modWriter.Write(newDataOffset, Endian.Big);
-                                        modWriter.Write(newDataOffset, Endian.Big);
-                                        modWriter.Write(newDataOffset, Endian.Big);
-                                        modWriter.Position = modWriter.Length;
-
-                                        newBundleInfo.Size = newSize;
-
-                                        // Register the new bundle (prevents duplicate key crash)
-                                        bundles[addedBundleHash] = newBundleInfo;
+                                        modWriter.Write(ebx.GetValue<int>("offset"), Endian.Big);
+                                        modWriter.Write(ebx.GetValue<int>("size"), Endian.Big);
+                                        lz++;
                                     }
-                                }
-                                else
-                                {
-                                    parent.Logger.Log($"[DEBUG-ADD] No added bundles for '{SuperBundleInfo.Name}'");
+
+                                    foreach (DbObject res in bundleObj.GetValue<DbObject>("res"))
+                                    {
+                                        if (locPatch != res.HasValue("patch") || locCat != res.GetValue<byte>("catalog") || locCas != res.GetValue<byte>("cas"))
+                                        {
+                                            locFlags[lz] = 1;
+                                            modWriter.Write(locUnused);
+                                            modWriter.Write(locPatch = res.HasValue("patch"));
+                                            modWriter.Write(locCat = res.GetValue<byte>("catalog"));
+                                            modWriter.Write(locCas = res.GetValue<byte>("cas"));
+                                        }
+                                        modWriter.Write(res.GetValue<int>("offset"), Endian.Big);
+                                        modWriter.Write(res.GetValue<int>("size"), Endian.Big);
+                                        lz++;
+                                    }
+
+                                    foreach (DbObject chunk in bundleObj.GetValue<DbObject>("chunks"))
+                                    {
+                                        if (locPatch != chunk.HasValue("patch") || locCat != chunk.GetValue<byte>("catalog") || locCas != chunk.GetValue<byte>("cas"))
+                                        {
+                                            locFlags[lz] = 1;
+                                            modWriter.Write(locUnused);
+                                            modWriter.Write(locPatch = chunk.HasValue("patch"));
+                                            modWriter.Write(locCat = chunk.GetValue<byte>("catalog"));
+                                            modWriter.Write(locCas = chunk.GetValue<byte>("cas"));
+                                        }
+                                        modWriter.Write(chunk.GetValue<int>("offset"), Endian.Big);
+                                        modWriter.Write(chunk.GetValue<int>("size"), Endian.Big);
+                                        lz++;
+                                    }
+
+                                    newLocationOffset = (uint)(modWriter.Position - newBundleInfo.Offset);
+                                    modWriter.Write(locFlags);
+                                    uint newSize = (uint)(modWriter.Position - newBundleInfo.Offset);
+                                    modWriter.WritePadding(4);
+
+                                    // Patch back the header placeholders
+                                    modWriter.Position = newBundleInfo.Offset;
+                                    modWriter.Write(newBundleOffset, Endian.Big);
+                                    modWriter.Write(newBundleSize, Endian.Big);
+                                    modWriter.Write(newLocationOffset, Endian.Big);
+                                    modWriter.Write(newTotalCount, Endian.Big);
+                                    modWriter.Write(newDataOffset, Endian.Big);
+                                    modWriter.Write(newDataOffset, Endian.Big);
+                                    modWriter.Write(newDataOffset, Endian.Big);
+                                    modWriter.Position = modWriter.Length;
+
+                                    newBundleInfo.Size = newSize;
+
+                                    // Register the new bundle (prevents duplicate key crash)
+                                    bundles[addedBundleHash] = newBundleInfo;
                                 }
                             }
-                            // End added bundles
+                            else
+                            {
+                                parent.Logger.Log($"[DEBUG-ADD] No added bundles for '{SuperBundleInfo.Name}'");
+                            }
                         }
+                        // End added bundles
+
 
                         int sbId = parent.m_am.GetSuperBundleId(SuperBundleInfo.Name);
                         if (parent.m_modifiedSuperBundles.ContainsKey(sbId))
