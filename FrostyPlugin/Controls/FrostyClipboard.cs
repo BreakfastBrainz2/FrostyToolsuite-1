@@ -7,6 +7,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -58,11 +59,11 @@ namespace Frosty.Core.Controls
         private object DeepCopy(object data, EbxAsset asset, EbxAssetEntry entry, ref Dictionary<object, object> oldNewMapping)
         {
             Type dataType = data.GetType();
-            if (dataType.IsPrimitive || dataType.IsValueType)
+            if (dataType.IsPrimitive || dataType.IsValueType || !dataType.GetCustomAttributes<EbxClassMetaAttribute>().Any())
                 return data;
 
             dynamic newData;
-            if (dataType.GetCustomAttribute<EbxClassMetaAttribute>().Type == EbxFieldType.Pointer)
+            if (dataType.GetCustomAttribute<EbxClassMetaAttribute>()?.Type == EbxFieldType.Pointer)
             {
                 if (oldNewMapping.ContainsKey(data))
                     return oldNewMapping[data];
@@ -106,7 +107,7 @@ namespace Frosty.Core.Controls
 
             foreach (PropertyInfo pi in dataType.GetProperties(BindingFlags.Instance | BindingFlags.Public))
             {
-                if (pi.Name.StartsWith("__"))
+                if (pi.Name.StartsWith("__") || !pi.CanWrite)
                     continue;
 
                 dynamic oldValue = pi.GetValue(data);
@@ -167,7 +168,7 @@ namespace Frosty.Core.Controls
                 }
                 return newPr;
             }
-            
+
             if (objType.GetInterface("IList") != null)
             {
                 IList oldList = (IList)obj;
