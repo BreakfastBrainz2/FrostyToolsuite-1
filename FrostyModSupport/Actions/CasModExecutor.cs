@@ -521,6 +521,15 @@ namespace Frosty.ModSupport
                                     // Ensure chunk is in the SuperBundle's TOC chunks dictionary
                                     if (!chunks.ContainsKey(name))
                                     {
+                                        byte[] fullData = parent.m_archiveData[entry.Sha1].Data;
+                                        if (casWriter == null || casWriter.Length + fullData.Length > 1073741824)
+                                        {
+                                            casWriter?.Close();
+                                            casWriter = GetNextCas(catalog, out casFileIndex);
+                                        }
+
+                                        uint fullChunkOffset = (uint)casWriter.Position;
+
                                         ChunkInfo chunkInfo = new ChunkInfo()
                                         {
                                             Guid = name,
@@ -532,11 +541,12 @@ namespace Frosty.ModSupport
                                                 IsPatch = parent.m_hasPatchFolder,
                                                 CatalogIndex = catalogIndex,
                                                 CasIndex = (byte)casFileIndex,
-                                                Offset = chunkOffset,
-                                                Size = (uint)data.Length
+                                                Offset = fullChunkOffset,
+                                                Size = (uint)fullData.Length // Use FULL size
                                             }
                                         };
                                         chunks.Add(name, chunkInfo);
+                                        casWriter.Write(fullData); // Write FULL data for the TOC
                                     }
                                 }
 
@@ -830,6 +840,15 @@ namespace Frosty.ModSupport
                                         // Register chunk in the SuperBundle's TOC chunks dictionary
                                         if (!chunks.ContainsKey(chunkId))
                                         {
+                                            byte[] fullData = parent.m_archiveData[entry.Sha1].Data;
+                                            if (casWriter == null || casWriter.Length + fullData.Length > 1073741824)
+                                            {
+                                                casWriter?.Close();
+                                                casWriter = GetNextCas(catalog, out casFileIndex);
+                                            }
+
+                                            uint fullChunkOffset = (uint)casWriter.Position;
+
                                             ChunkInfo chunkInfo = new ChunkInfo()
                                             {
                                                 Guid = chunkId,
@@ -841,11 +860,12 @@ namespace Frosty.ModSupport
                                                     IsPatch = parent.m_hasPatchFolder,
                                                     CatalogIndex = catalogIndex,
                                                     CasIndex = (byte)casFileIndex,
-                                                    Offset = chunkOffset,
-                                                    Size = (uint)data.Length
+                                                    Offset = fullChunkOffset,
+                                                    Size = (uint)fullData.Length // Use FULL size
                                                 }
                                             };
                                             chunks.Add(chunkId, chunkInfo);
+                                            casWriter.Write(fullData); // Write FULL data for the TOC
                                         }
                                     }
 

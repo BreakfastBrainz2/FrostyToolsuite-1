@@ -55,6 +55,8 @@ namespace DuplicationPlugin
             ChunkAssetEntry newChunkEntry = DuplicateChunk(chunkEntry, (texture.Flags.HasFlag(TextureFlags.OnDemandLoaded) || texture.Type != TextureType.TT_2d) ? null : texture);
             newTexture.ChunkId = newChunkEntry.Id;
 
+            newTexture.AssetNameHash = (uint)Utils.HashString($"Output/Win32/{newResEntry.Name}.res", true);
+
             // Link the newly duplicates ebx, chunk, and res entries together
             newResEntry.LinkAsset(newChunkEntry);
             newEntry.LinkAsset(newResEntry);
@@ -596,9 +598,9 @@ namespace DuplicationPlugin
 
             EbxAssetEntry newEntry = App.AssetManager.AddEbx(newName, newAsset);
 
-                newEntry.AddedBundles.AddRange(entry.EnumerateBundles());
-                dupeResult = true;
-            
+            newEntry.AddedBundles.AddRange(entry.EnumerateBundles());
+            dupeResult = true;
+
             newEntry.ModifiedEntry.DependentAssets.AddRange(newAsset.Dependencies);
 
             return newEntry;
@@ -699,7 +701,7 @@ namespace DuplicationPlugin
                     else
                     {
                         newEntry = App.AssetManager.AddRes(name, resType, newMeta, reader.ReadToEnd());
-                    }  
+                    }
                 }
 
                 App.Logger.Log(string.Format("Duped res {0} to {1}", entry.Name, newEntry.Name));
