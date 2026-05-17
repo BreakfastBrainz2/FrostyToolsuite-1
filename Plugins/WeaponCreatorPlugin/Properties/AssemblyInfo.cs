@@ -23,7 +23,7 @@ using System.Windows;
 [assembly: Guid("4b612468-9b6a-4304-88a5-055c3575eb3d")]
 
 [assembly: PluginDisplayName("Weapon Creator Plugin")]
-[assembly: PluginAuthor("BreakfastBrainz2")]
-[assembly: PluginVersion("1.0.0.0")]
+[assembly: PluginAuthor("BreakfastBrainz2 and Lala")]
+[assembly: PluginVersion("BFN 1.0.2.0")]
 
 [assembly: RegisterMenuExtension(typeof(AddWeaponMenuExtension))]

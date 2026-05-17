@@ -5,9 +5,10 @@
                            xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                            xmlns:local="clr-namespace:CustomizationCreatorPlugin.Windows"
                            xmlns:ctrl="clr-namespace:Frosty.Controls;assembly=FrostyControls"
+                           Icon="/FrostyCore;component/AppIcon.ico"
                            mc:Ignorable="d"
                            Title="Create Customization"
-                           Height="170"
+                           Height="284"
                            Width="650"
                            ResizeMode="NoResize"
                            WindowStartupLocation="CenterOwner">
@@ -19,6 +20,7 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
+
     <Grid Background="{StaticResource WindowBackground}">
         <Grid.RowDefinitions>
             <RowDefinition />
@@ -27,30 +29,106 @@
 
         <Grid Background="{StaticResource ListBackground}">
             <StackPanel>
-                <DockPanel LastChildFill="True"
-                           Margin="5">
+                <!-- Name -->
+                <DockPanel LastChildFill="True" Margin="5">
                     <Label Content="Name: "
                            FontFamily="Global User Interface"
-                           Width="125" />
+                           Width="130" />
                     <TextBox x:Name="varWepNameTextBox"
                              VerticalContentAlignment="Center"
                              Text=""
                              Margin="1"
                              BorderThickness="1"
+                             ToolTip="Base name used when duplicated Assets (e.g. Soldier_HeadProp_Pie). Will autocomplete the suffixes."
                              TextChanged="varWepNameTextBox_TextChanged" />
                 </DockPanel>
-                <DockPanel LastChildFill="True"
-                           Margin="5">
-                    <Label Content="Blueprint Directory: "
+
+                <!-- Texture Base Name -->
+                <DockPanel LastChildFill="True" Margin="5">
+                    <Label Content="Texture Base Name: "
                            FontFamily="Global User Interface"
-                           Width="125" />
-                    <TextBox x:Name="varBPDirTextBox"
+                           Width="130" />
+                    <TextBox x:Name="varTexNameTextBox"
                              VerticalContentAlignment="Center"
                              Text=""
-                             Margin="1"
                              BorderThickness="1"
-                             TextChanged="varBPDirTextBox_TextChanged" />
+                             ToolTip="Base name used when duplicated textures (e.g. Soldier_HeadProp_Pie2). Will autocomplete the suffixes."
+                             TextChanged="varTexNameTextBox_TextChanged" DockPanel.Dock="Bottom" Height="22" />
                 </DockPanel>
+
+                <!-- Blueprint Directory -->
+                <DockPanel LastChildFill="True" Margin="5">
+                    <Label Content="Blueprint Directory: "
+                           FontFamily="Global User Interface"
+                           Width="130" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="varBPDirTextBox"
+                                 VerticalContentAlignment="Center"
+                                 Text=""
+                                 Margin="1"
+                                 BorderThickness="1"
+                                 TextChanged="varBPDirTextBox_TextChanged" />
+                        <Button Grid.Column="1" Width="28" Height="22"
+                                Margin="2,0,0,0"
+                                Background="Transparent" BorderThickness="0"
+                                Click="BrowseBlueprintDir_Click"
+                                ToolTip="Browse existing blueprint directories">
+                            <TextBlock Text="…" FontSize="18" Foreground="White" 
+                                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Button>
+                    </Grid>
+                </DockPanel>
+
+                <!-- Base Customization selector -->
+                <DockPanel LastChildFill="True" Margin="5">
+                    <Label Content="Base Customization: "
+                           FontFamily="Global User Interface"
+                           Width="130" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="varBaseCustomizationTextBox"
+                                 VerticalContentAlignment="Center"
+                                 Text=""
+                                 Margin="1"
+                                 BorderThickness="1"
+                                 TextChanged="varBaseCustomizationTextBox_TextChanged"
+                                 IsReadOnly="True"
+                                 Background="{StaticResource ListBackground}" />
+                        <Button Grid.Column="1" Width="28" Height="22"
+                                Margin="2,0,0,0"
+                                Background="Transparent" BorderThickness="0"
+                                Click="BrowseBaseCustomization_Click"
+                                ToolTip="Pick a base customization (stats will be copied from it)">
+                            <TextBlock Text="…" FontSize="18" Foreground="White" 
+                                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Button>
+                    </Grid>
+                </DockPanel>
+
+                <CheckBox x:Name="duplicateTexturesCheckBox"
+                          Content=" Duplicate Textures"
+                          Foreground="{StaticResource FontColor}"
+                          Margin="140,5,0,0"
+                          IsChecked="False" />
+                
+                <CheckBox x:Name="stripPhysicsBonesCheckBox"
+                          Content=" Strip Physics Bones (Proc Bones)"
+                          Foreground="{StaticResource FontColor}"
+                          Margin="140,5,0,0"
+                          IsChecked="True" />
+
+                <CheckBox x:Name="addToCharactersSharedNetworkRegistryCheckBox"
+                          Content=" Add to Characters Shared Network Registry"
+                          Foreground="{StaticResource FontColor}"
+                          Margin="140,5,0,0"
+                          IsChecked="True" />
             </StackPanel>
         </Grid>
 
@@ -63,10 +141,19 @@
                             Width="75"
                             Click="cancelButton_Click" />
                     <Button x:Name="createButton"
-                            Content="Create Weapon"
+                            Content="Create Customization"
                             DockPanel.Dock="Right"
-                            Width="95"
-                            Click="createButton_Click" />
+                            Width="121"
+                            Click="createButton_Click" RenderTransformOrigin="0.5,0.5" >
+                        <Button.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform/>
+                                <SkewTransform AngleY="0"/>
+                                <RotateTransform Angle="0"/>
+                                <TranslateTransform Y="0"/>
+                            </TransformGroup>
+                        </Button.RenderTransform>
+                    </Button>
                 </DockPanel>
             </Grid>
         </Border>

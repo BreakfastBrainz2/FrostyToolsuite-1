@@ -7,7 +7,8 @@
                            xmlns:ctrl="clr-namespace:Frosty.Controls;assembly=FrostyControls"
                            mc:Ignorable="d"
                            Title="Create Weapon"
-                           Height="170"
+                           Icon="/FrostyCore;component/AppIcon.ico"
+                           Height="260"
                            Width="650"
                            ResizeMode="NoResize"
                            WindowStartupLocation="CenterOwner">
@@ -27,8 +28,7 @@
 
         <Grid Background="{StaticResource ListBackground}">
             <StackPanel>
-                <DockPanel LastChildFill="True"
-                           Margin="5">
+                <DockPanel LastChildFill="True" Margin="5">
                     <Label Content="Name: "
                            FontFamily="Global User Interface"
                            Width="125" />
@@ -39,18 +39,95 @@
                              BorderThickness="1"
                              TextChanged="varWepNameTextBox_TextChanged" />
                 </DockPanel>
-                <DockPanel LastChildFill="True"
-                           Margin="5">
+                <DockPanel LastChildFill="True" Margin="5">
                     <Label Content="Blueprint Directory: "
                            FontFamily="Global User Interface"
                            Width="125" />
-                    <TextBox x:Name="varBPDirTextBox"
-                             VerticalContentAlignment="Center"
-                             Text=""
-                             Margin="1"
-                             BorderThickness="1"
-                             TextChanged="varBPDirTextBox_TextChanged" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="varBPDirTextBox"
+                                 VerticalContentAlignment="Center"
+                                 Text=""
+                                 Margin="1"
+                                 BorderThickness="1"
+                                 TextChanged="varBPDirTextBox_TextChanged" />
+                        <Button Grid.Column="1" Width="28" Height="22"
+                                Margin="2,0,0,0"
+                                Background="Transparent" BorderThickness="0"
+                                Click="BrowseBlueprintDir_Click"
+                                ToolTip="Browse existing blueprint directories">
+                            <TextBlock Text="…" FontSize="18" Foreground="White" 
+                                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Button>
+                    </Grid>
                 </DockPanel>
+                <DockPanel LastChildFill="True" Margin="5">
+                    <Label Content="AntState Directory: "
+                           FontFamily="Global User Interface"
+                           Width="125" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="varAntStateDirTextBox"
+                                 VerticalContentAlignment="Center"
+                                 Text=""
+                                 Margin="1"
+                                 BorderThickness="1"
+                                 TextChanged="varAntStateDirTextBox_TextChanged" />
+                        <Button Grid.Column="1" Width="28" Height="22"
+                                Margin="2,0,0,0"
+                                Background="Transparent" BorderThickness="0"
+                                Click="BrowseAntStateDir_Click"
+                                ToolTip="Browse animations/antanimations/gameplay/weapons/ subdirectories">
+                            <TextBlock Text="…" FontSize="18" Foreground="White"
+                                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Button>
+                    </Grid>
+                </DockPanel>
+                <DockPanel LastChildFill="True" Margin="5">
+                    <Label Content="Base Weapon: "
+                           FontFamily="Global User Interface"
+                           Width="125" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="varBaseWeaponTextBox"
+                                 VerticalContentAlignment="Center"
+                                 Text=""
+                                 Margin="1"
+                                 BorderThickness="1"
+                                 TextChanged="varBaseWeaponTextBox_TextChanged"
+                                 IsReadOnly="True"
+                                 Background="{StaticResource ListBackground}" />
+                        <Button Grid.Column="1" Width="28" Height="22"
+                                Margin="2,0,0,0"
+                                Background="Transparent" BorderThickness="0"
+                                Click="BrowseBaseWeapon_Click"
+                                ToolTip="Pick a base weapon (stats will be copied from it)">
+                            <TextBlock Text="…" FontSize="18" Foreground="White" 
+                                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Button>
+                    </Grid>
+                </DockPanel>
+
+                <CheckBox x:Name="addToAllWeaponAssetsCheckBox"
+                          Content=" Add Unlock Asset to AllWeaponAssets"
+                          Foreground="{StaticResource FontColor}"
+                          Margin="140,5,0,0"
+                          IsChecked="True"/>
+                
+                <CheckBox x:Name="addToNetworkRegistryCheckBox"
+                          Content=" Add to Characters Shared Network Registry"
+                          Foreground="{StaticResource FontColor}"
+                          Margin="140,5,0,0"
+                          IsChecked="True"/>
             </StackPanel>
         </Grid>
 
