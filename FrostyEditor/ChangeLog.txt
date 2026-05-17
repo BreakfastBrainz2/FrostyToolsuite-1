@@ -4,6 +4,17 @@ This fork is based on HarGabt's fork and was designed for Plants vs. Zombies: Ba
 
 Changes in my fork:
 
+(2026.05.17)
+--------
+- Bundle creation support.
+- Sound duping support.
+- Sound importing support.
+- Port Blueprint Editor Team's Blueprint Editor.
+- Port v0e's VFX Editor.
+- Update Customization Creator.
+- Update Weapon Creator.
+All these changes wouldn't be possible without the help of Lala on Discord.
+
 (2026.04.04)
 --------
 - Bundle Editor can now add and remove PhysicsAssets.
