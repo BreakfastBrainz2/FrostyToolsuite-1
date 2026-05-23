@@ -4,12 +4,6 @@
 [submodule "Plugins/FrostyMovieTexture2AssetEditor"]
 	path = Plugins/FrostyMovieTexture2AssetEditor
 	url = https://github.com/J-Lyt/FrostyMovieTexture2AssetEditor
-[submodule "Plugins/FrostyColorPicker"]
-	path = Plugins/FrostyColorPicker
-	url = https://github.com/natv1337/FrostyColorPicker
 [submodule "Plugins/FrostyEmitterStackPlugin"]
 	path = Plugins/FrostyEmitterStackPlugin
 	url = https://github.com/Brawltendo/FrostyEmitterStackPlugin
-[submodule "Plugins/CopyFilePathPlugin"]
-	path = Plugins/CopyFilePathPlugin
-	url = https://github.com/HarGabt/CopyFilePathPlugin
