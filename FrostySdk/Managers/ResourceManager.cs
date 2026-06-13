@@ -15,6 +15,12 @@ namespace FrostySdk.Managers
         private Dictionary<Sha1, CatResourceEntry> m_resourceEntries = new Dictionary<Sha1, CatResourceEntry>();
         private Dictionary<Sha1, CatPatchEntry> m_patchEntries = new Dictionary<Sha1, CatPatchEntry>();
         private Dictionary<int, string> m_casFiles = new Dictionary<int, string>();
+
+        // Cached open readers, avoids opening/closing the same .sb and .cas files
+        private readonly Dictionary<string, NativeReader> m_openReaders = new Dictionary<string, NativeReader>();
+        private readonly object m_readerCacheLock = new object();
+        private NativeReader m_sbdataReader = null;
+        private readonly object m_sbdataLock = new object();
         //private Dictionary<string, byte[]> keys = new Dictionary<string, byte[]>();
 
         public ResourceManager(FileSystemManager inFileSystem)
@@ -69,7 +75,7 @@ namespace FrostySdk.Managers
                             string keyStr = arr[1].Trim();
 
                             key = new byte[keyStr.Length / 2];
-                            for(int i = 0; i < keyStr.Length / 2; i++)
+                            for (int i = 0; i < keyStr.Length / 2; i++)
                                 key[i] = Convert.ToByte(keyStr.Substring(i * 2, 2), 16);
                         }
                     }
@@ -80,18 +86,11 @@ namespace FrostySdk.Managers
         // unpatched data from cas
         public Stream GetResourceData(Sha1 sha1)
         {
-            if (m_patchEntries.ContainsKey(sha1))
-            {
-                CatPatchEntry patchEntry = m_patchEntries[sha1];
+            if (m_patchEntries.TryGetValue(sha1, out CatPatchEntry patchEntry))
                 return GetResourceData(patchEntry.BaseSha1, patchEntry.DeltaSha1);
-            }
 
-            if (!m_resourceEntries.ContainsKey(sha1))
-            {
+            if (!m_resourceEntries.TryGetValue(sha1, out CatResourceEntry entry))
                 return null;
-            }
-
-            CatResourceEntry entry = m_resourceEntries[sha1];
             byte[] buffer = null;
 
             if (entry.IsEncrypted && !KeyManager.Instance.HasKey(entry.KeyId))
@@ -112,12 +111,8 @@ namespace FrostySdk.Managers
         }
         public Stream GetRawResourceData(Sha1 sha1)
         {
-            if (!m_resourceEntries.ContainsKey(sha1))
-            {
+            if (!m_resourceEntries.TryGetValue(sha1, out CatResourceEntry entry))
                 return null;
-            }
-
-            CatResourceEntry entry = m_resourceEntries[sha1];
             byte[] buffer = null;
 
             if (entry.IsEncrypted && !KeyManager.Instance.HasKey(entry.KeyId))
@@ -139,13 +134,8 @@ namespace FrostySdk.Managers
         // patched data from cas
         public Stream GetResourceData(Sha1 baseSha1, Sha1 deltaSha1)
         {
-            if (!m_resourceEntries.ContainsKey(baseSha1) || !m_resourceEntries.ContainsKey(deltaSha1))
-            {
+            if (!m_resourceEntries.TryGetValue(baseSha1, out CatResourceEntry baseEntry) || !m_resourceEntries.TryGetValue(deltaSha1, out CatResourceEntry deltaEntry))
                 return null;
-            }
-
-            CatResourceEntry baseEntry = m_resourceEntries[baseSha1];
-            CatResourceEntry deltaEntry = m_resourceEntries[deltaSha1];
 
             byte[] buffer = null;
             using (NativeReader baseReader = new NativeReader(new FileStream(m_casFiles[baseEntry.ArchiveIndex], FileMode.Open, FileAccess.Read)))
@@ -177,57 +167,51 @@ namespace FrostySdk.Managers
         // unpatched data from binary superbundle
         public Stream GetResourceData(string superBundleName, long offset, long size)
         {
-            byte[] buffer = null;
-            using (NativeReader bufferReader = new NativeReader(new FileStream(m_fileSystem.ResolvePath(string.Format("{0}", superBundleName)), FileMode.Open, FileAccess.Read)))
+            NativeReader bufferReader = GetOrOpenReader(m_fileSystem.ResolvePath(superBundleName));
+            byte[] buffer;
+            lock (bufferReader)
             {
                 using (CasReader reader = new CasReader(bufferReader.CreateViewStream(offset, size)))
-                {
                     buffer = reader.Read();
-                }
             }
-
-            return (buffer != null) ? new MemoryStream(buffer) : null;
+            return buffer != null ? new MemoryStream(buffer) : null;
         }
         public Stream GetRawResourceData(string superBundleName, long offset, long size)
         {
-            byte[] buffer = null;
-            using (NativeReader bufferReader = new NativeReader(new FileStream(m_fileSystem.ResolvePath(string.Format("{0}", superBundleName)), FileMode.Open, FileAccess.Read)))
+            NativeReader bufferReader = GetOrOpenReader(m_fileSystem.ResolvePath(superBundleName));
+            byte[] buffer;
+            lock (bufferReader)
             {
                 using (NativeReader reader = new NativeReader(bufferReader.CreateViewStream(offset, size)))
-                {
                     buffer = reader.ReadToEnd();
-                }
             }
-
-            return (buffer != null) ? new MemoryStream(buffer) : null;
+            return buffer != null ? new MemoryStream(buffer) : null;
         }
 
         // patched data from binary superbundle (stored in cache)
         public Stream GetResourceData(long offset, long size)
         {
-            byte[] buffer = null;
-            using (NativeReader bufferReader = new NativeReader(new FileStream(m_fileSystem.CacheName + "_sbdata.cas", FileMode.Open, FileAccess.Read)))
+            byte[] buffer;
+            lock (m_sbdataLock)
             {
-                using (CasReader reader = new CasReader(bufferReader.CreateViewStream(offset, size)))
-                {
+                if (m_sbdataReader == null)
+                    m_sbdataReader = new NativeReader(new FileStream(m_fileSystem.CacheName + "_sbdata.cas", FileMode.Open, FileAccess.Read, FileShare.Read));
+                using (CasReader reader = new CasReader(m_sbdataReader.CreateViewStream(offset, size)))
                     buffer = reader.Read();
-                }
             }
-
-            return (buffer != null) ? new MemoryStream(buffer) : null;
+            return buffer != null ? new MemoryStream(buffer) : null;
         }
         public Stream GetRawResourceData(long offset, long size)
         {
-            byte[] buffer = null;
-            using (NativeReader bufferReader = new NativeReader(new FileStream(m_fileSystem.CacheName + "_sbdata.cas", FileMode.Open, FileAccess.Read)))
+            byte[] buffer;
+            lock (m_sbdataLock)
             {
-                using (NativeReader reader = new NativeReader(bufferReader.CreateViewStream(offset, size)))
-                {
+                if (m_sbdataReader == null)
+                    m_sbdataReader = new NativeReader(new FileStream(m_fileSystem.CacheName + "_sbdata.cas", FileMode.Open, FileAccess.Read, FileShare.Read));
+                using (NativeReader reader = new NativeReader(m_sbdataReader.CreateViewStream(offset, size)))
                     buffer = reader.ReadToEnd();
-                }
             }
-
-            return (buffer != null) ? new MemoryStream(buffer) : null;
+            return buffer != null ? new MemoryStream(buffer) : null;
         }
 
         // data from buffer (ie. modified or inline data)
@@ -245,38 +229,41 @@ namespace FrostySdk.Managers
             return (outBuffer != null) ? new MemoryStream(outBuffer) : null;
         }
 
-        public Sha1 GetBaseSha1(Sha1 sha1) => m_patchEntries.ContainsKey(sha1) ? m_patchEntries[sha1].BaseSha1 : sha1;
+        public Sha1 GetBaseSha1(Sha1 sha1) => m_patchEntries.TryGetValue(sha1, out CatPatchEntry entry) ? entry.BaseSha1 : sha1;
 
         public bool IsEncrypted(Sha1 sha1)
         {
-            if (m_resourceEntries.ContainsKey(sha1) && m_resourceEntries[sha1].IsEncrypted)
-            {
+            if (m_resourceEntries.TryGetValue(sha1, out CatResourceEntry resEntry) && resEntry.IsEncrypted)
                 return true;
-            }
-            if (m_patchEntries.ContainsKey(sha1))
+
+            if (m_patchEntries.TryGetValue(sha1, out CatPatchEntry patchEntry))
             {
-                // is patched
-                CatPatchEntry patchEntry = m_patchEntries[sha1];
-
-                // doesnt matter if base or delta are encrypted, asset is considered encrypted
-                if (m_resourceEntries.ContainsKey(patchEntry.BaseSha1) &&
-                    m_resourceEntries[patchEntry.BaseSha1].IsEncrypted)
-                {
+                if (m_resourceEntries.TryGetValue(patchEntry.BaseSha1, out CatResourceEntry baseEntry) && baseEntry.IsEncrypted)
                     return true;
-                }
 
-                if (m_resourceEntries.ContainsKey(patchEntry.DeltaSha1) &&
-                    m_resourceEntries[patchEntry.DeltaSha1].IsEncrypted)
-                {
+                if (m_resourceEntries.TryGetValue(patchEntry.DeltaSha1, out CatResourceEntry deltaEntry) && deltaEntry.IsEncrypted)
                     return true;
-                }
             }
+
             return false;
         }
 
         public void SetLogger(ILogger inLogger) => m_logger = inLogger;
 
         public void ClearLogger() => m_logger = null;
+
+        private NativeReader GetOrOpenReader(string resolvedPath)
+        {
+            lock (m_readerCacheLock)
+            {
+                if (!m_openReaders.TryGetValue(resolvedPath, out NativeReader reader))
+                {
+                    reader = new NativeReader(new FileStream(resolvedPath, FileMode.Open, FileAccess.Read, FileShare.Read));
+                    m_openReaders[resolvedPath] = reader;
+                }
+                return reader;
+            }
+        }
 
         // adds catalog entires to manager
         private void LoadCatalog(string filename)

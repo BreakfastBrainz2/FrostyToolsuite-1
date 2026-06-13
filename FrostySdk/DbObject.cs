@@ -28,7 +28,7 @@ namespace FrostySdk
         }
 
         public static DbObject CreateObject() => new DbObject(bObject: true);
-        public static DbObject CreateList()   => new DbObject(bObject: false);
+        public static DbObject CreateList() => new DbObject(bObject: false);
 
         #region -- Object functions --
         public T GetValue<T>(string name, T defaultValue = default(T))
@@ -38,17 +38,13 @@ namespace FrostySdk
                 return defaultValue;
             }
 
-            if (!hash.ContainsKey(name))
-            {
+            if (!hash.TryGetValue(name, out object raw))
                 return defaultValue;
-            }
 
-            if (hash[name] is T)
-            {
-                return (T)hash[name];
-            }
+            if (raw is T typed)
+                return typed;
 
-            return (T)Convert.ChangeType(hash[name], typeof(T));
+            return (T)Convert.ChangeType(raw, typeof(T));
         }
 
         public void SetValue(string name, object newValue)

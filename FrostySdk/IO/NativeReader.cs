@@ -13,13 +13,14 @@ namespace FrostySdk.IO
 
     public class NativeReader : IDisposable
     {
+        [ThreadStatic]
+        private static char[] _stringBuffer;
+
         public Stream BaseStream => stream;
 
-        public virtual long Position
-        {
+        public virtual long Position {
             get => stream?.Position ?? 0;
-            set
-            {
+            set {
                 if (deobfuscator == null || !deobfuscator.AdjustPosition(this, value))
                     stream.Position = value;
             }
@@ -39,7 +40,7 @@ namespace FrostySdk.IO
             if (stream != null)
                 streamLength = stream.Length;
 
-            wideDecoder = new UnicodeEncoding();
+            wideDecoder = Encoding.Unicode;
             buffer = new byte[20];
             charBuffer = new char[2];
         }
@@ -237,51 +238,92 @@ namespace FrostySdk.IO
 
         public string ReadNullTerminatedString()
         {
-            StringBuilder sb = new StringBuilder();
+            char[] buf = _stringBuffer;
+            if (buf == null)
+                _stringBuffer = buf = new char[256];
+            int count = 0;
+
             while (true)
             {
-                char c = (char)ReadByte();
-                if (c == 0x00)
-                    return sb.ToString();
+                byte b = ReadByte();
+                if (b == 0x00)
+                    return new string(buf, 0, count);
 
-                sb.Append(c);
+                if (count == buf.Length)
+                {
+                    char[] newBuf = new char[buf.Length * 2];
+                    Array.Copy(buf, newBuf, buf.Length);
+                    _stringBuffer = buf = newBuf;
+                }
+                buf[count++] = (char)b;
             }
         }
 
         public string ReadNullTerminatedWideString()
         {
-            StringBuilder sb = new StringBuilder();
+            char[] buf = _stringBuffer;
+            if (buf == null)
+                _stringBuffer = buf = new char[256];
+            int count = 0;
+
             while (true)
             {
                 char c = ReadWideChar();
                 if (c == 0x0000)
-                    return sb.ToString();
+                    return new string(buf, 0, count);
 
-                sb.Append(c);
+                if (count == buf.Length)
+                {
+                    char[] newBuf = new char[buf.Length * 2];
+                    Array.Copy(buf, newBuf, buf.Length);
+                    _stringBuffer = buf = newBuf;
+                }
+                buf[count++] = c;
             }
         }
 
         public string ReadSizedString(int strLen)
         {
-            StringBuilder sb = new StringBuilder();
+            char[] buf = _stringBuffer;
+            if (buf == null)
+                _stringBuffer = buf = new char[256];
+            int count = 0;
+
             for (int i = 0; i < strLen; i++)
             {
                 char c = (char)ReadByte();
                 if (c != 0x00)
-                    sb.Append(c);
+                {
+                    if (count == buf.Length)
+                    {
+                        char[] newBuf = new char[buf.Length * 2];
+                        Array.Copy(buf, newBuf, buf.Length);
+                        _stringBuffer = buf = newBuf;
+                    }
+                    buf[count++] = c;
+                }
             }
-            return sb.ToString();
+            return new string(buf, 0, count);
         }
 
         public string ReadLine()
         {
-            StringBuilder sb = new StringBuilder();
-            byte c = 0x00;
+            char[] buf = _stringBuffer;
+            if (buf == null)
+                _stringBuffer = buf = new char[256];
+            int count = 0;
 
+            byte c = 0x00;
             while (c != 0x0d && c != 0x0a)
             {
                 c = ReadByte();
-                sb.Append((char)c);
+                if (count == buf.Length)
+                {
+                    char[] newBuf = new char[buf.Length * 2];
+                    Array.Copy(buf, newBuf, buf.Length);
+                    _stringBuffer = buf = newBuf;
+                }
+                buf[count++] = (char)c;
                 if (c == 0x0a || c == 0x0d || Position >= Length)
                     break;
             }
@@ -289,18 +331,27 @@ namespace FrostySdk.IO
             if (c == 0x0d)
                 ReadByte();
 
-            return sb.ToString().Trim('\r', '\n');
+            return new string(buf, 0, count).Trim('\r', '\n');
         }
 
         public string ReadWideLine()
         {
-            StringBuilder sb = new StringBuilder();
-            char c = (char)0x00;
+            char[] buf = _stringBuffer;
+            if (buf == null)
+                _stringBuffer = buf = new char[256];
+            int count = 0;
 
+            char c = (char)0x00;
             while (c != 0x0d && c != 0x0a)
             {
                 c = ReadWideChar();
-                sb.Append(c);
+                if (count == buf.Length)
+                {
+                    char[] newBuf = new char[buf.Length * 2];
+                    Array.Copy(buf, newBuf, buf.Length);
+                    _stringBuffer = buf = newBuf;
+                }
+                buf[count++] = c;
                 if (c == 0x0a || c == 0x0d || Position >= Length)
                     break;
             }
@@ -308,7 +359,7 @@ namespace FrostySdk.IO
             if (c == 0x0d)
                 ReadWideChar();
 
-            return sb.ToString().Trim('\r', '\n');
+            return new string(buf, 0, count).Trim('\r', '\n');
         }
 
         public void Pad(int alignment)
@@ -333,7 +384,7 @@ namespace FrostySdk.IO
                 return ReadBytes((int)totalSize);
 
             byte[] outBuffer = new byte[totalSize];
-            while(totalSize > 0)
+            while (totalSize > 0)
             {
                 int bufferSize = (totalSize > int.MaxValue) ? int.MaxValue : (int)totalSize;
                 byte[] tmpBuffer = new byte[bufferSize];
@@ -384,7 +435,9 @@ namespace FrostySdk.IO
         protected virtual void FillBuffer(int numBytes)
         {
             stream.Read(buffer, 0, numBytes);
-            deobfuscator?.Deobfuscate(buffer, Position, 0, numBytes);
+            var deob = deobfuscator;
+            if (deob != null)
+                deob.Deobfuscate(buffer, Position, 0, numBytes);
         }
 
         protected virtual void Dispose(bool disposing)
@@ -401,5 +454,4 @@ namespace FrostySdk.IO
             buffer = null;
         }
     }
-
 }

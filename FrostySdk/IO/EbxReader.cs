@@ -70,7 +70,7 @@ namespace FrostySdk.IO
 
     internal enum RiffEbxSection
     {
-        EBX  = 0x45425800, // BE
+        EBX = 0x45425800, // BE
         EBXS = 0x45425853, // BE
         EBXD = 0x45425844, // BE
         EFIX = 0x45464958, // BE
@@ -169,27 +169,21 @@ namespace FrostySdk.IO
     public class EbxAsset
     {
         public Guid FileGuid => fileGuid;
-        public Guid RootInstanceGuid
-        {
-            get
-            {
+        public Guid RootInstanceGuid {
+            get {
                 AssetClassGuid guid = ((dynamic)RootObject).GetInstanceGuid();
                 return guid.ExportedGuid;
             }
         }
 
-        public IEnumerable<Guid> Dependencies
-        {
-            get
-            {
+        public IEnumerable<Guid> Dependencies {
+            get {
                 for (int i = 0; i < dependencies.Count; i++)
                     yield return dependencies[i];
             }
         }
-        public IEnumerable<object> RootObjects
-        {
-            get
-            {
+        public IEnumerable<object> RootObjects {
+            get {
                 for (int i = 0; i < objects.Count; i++)
                 {
                     if (refCounts[i] == 0 || i == 0)
@@ -197,18 +191,14 @@ namespace FrostySdk.IO
                 }
             }
         }
-        public IEnumerable<object> Objects
-        {
-            get
-            {
+        public IEnumerable<object> Objects {
+            get {
                 for (int i = 0; i < objects.Count; i++)
                     yield return objects[i];
             }
         }
-        public IEnumerable<object> ExportedObjects
-        {
-            get
-            {
+        public IEnumerable<object> ExportedObjects {
+            get {
                 for (int i = 0; i < objects.Count; i++)
                 {
                     dynamic obj = objects[i];
@@ -221,7 +211,7 @@ namespace FrostySdk.IO
         public object RootObject => objects[0];
         public bool IsValid => objects.Count != 0;
         public bool TransientEdit { get; set; }
-		
+
         public Dictionary<string, long> OffsetsMap => offsetsMap;
 
         internal Guid fileGuid;
@@ -633,6 +623,10 @@ namespace FrostySdk.IO
 
         internal byte[] boxedValueBuffer;
 
+        // Cache for IsReferenceAttribute lookups, called on every field of every object read
+        private static readonly Dictionary<PropertyInfo, IsReferenceAttribute> s_isReferencePropCache = new Dictionary<PropertyInfo, IsReferenceAttribute>();
+        private static readonly object s_isReferencePropCacheLock = new object();
+
         // For writing to XML
         internal Dictionary<string, long> offsetsMap = new Dictionary<string, long>();
         internal string offsetKey = string.Empty;
@@ -903,9 +897,18 @@ namespace FrostySdk.IO
                 EbxField fieldType = GetField(classType, classType.FieldIndex + j);
                 PropertyInfo fieldProp = GetProperty(objType, fieldType);
 
-                IsReferenceAttribute attr = (fieldProp != null)
-                    ? fieldProp.GetCustomAttribute<IsReferenceAttribute>()
-                    : null;
+                IsReferenceAttribute attr = null;
+                if (fieldProp != null)
+                {
+                    lock (s_isReferencePropCacheLock)
+                    {
+                        if (!s_isReferencePropCache.TryGetValue(fieldProp, out attr))
+                        {
+                            attr = fieldProp.GetCustomAttribute<IsReferenceAttribute>();
+                            s_isReferencePropCache[fieldProp] = attr;
+                        }
+                    }
+                }
 
                 if (fieldType.DebugType == EbxFieldType.Inherited)
                 {
@@ -1006,7 +1009,7 @@ namespace FrostySdk.IO
                     return ReadUInt();
                 case EbxFieldType.Int64:
                     return ReadLong();
-                case EbxFieldType.UInt64: 
+                case EbxFieldType.UInt64:
                     return ReadULong();
                 case EbxFieldType.Float32:
                     return ReadFloat();

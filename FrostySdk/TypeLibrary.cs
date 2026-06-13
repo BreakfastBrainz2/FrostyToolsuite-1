@@ -143,7 +143,7 @@ namespace FrostySdk.Attributes
     /// <summary>
     /// 
     /// </summary>
-    [AttributeUsage(AttributeTargets.Class|AttributeTargets.Enum)]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Enum)]
     public class RuntimeSizeAttribute : Attribute
     {
         public int Size { get; set; }
@@ -259,7 +259,7 @@ namespace FrostySdk.Attributes
     /// <summary>
     /// Specifies that this property (array/struct) is expanded when first loaded
     /// </summary>
-    [AttributeUsage(AttributeTargets.Property|AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
     public class IsExpandedByDefaultAttribute : Attribute
     {
         public IsExpandedByDefaultAttribute()
@@ -341,7 +341,7 @@ namespace FrostySdk.Attributes
         public float MaxValue { get; set; }
         public float SmallChange { get; set; }
         public float LargeChange { get; set; }
-        public bool  IsSnapToTickEnabled { get; set; }
+        public bool IsSnapToTickEnabled { get; set; }
 
         public SliderMinMaxAttribute(float min, float max, float small, float large, bool snap)
         {
@@ -456,7 +456,7 @@ namespace FrostySdk
         /// </summary>
         public object Original;
     }
-    
+
     public abstract class BaseFieldOverride
     {
     }
@@ -468,7 +468,7 @@ namespace FrostySdk
         public string Category => meta.GetValue<string>("category", "");
         public string Editor => meta.GetValue<string>("editor", "");
         public string ValueConverter => meta.GetValue<string>("valueConverter", "");
-        
+
         public bool IsAbstract => meta.GetValue<bool>("abstract", false);
         public bool IsTransient => meta.GetValue<bool>("transient", false);
         public bool IsReadOnly => meta.GetValue<bool>("readOnly", false);
@@ -677,7 +677,9 @@ namespace FrostySdk
         private static readonly List<Guid> m_constructingGuids = new List<Guid>();
 
         private static readonly Dictionary<Guid, Type> m_guidTypeMapping = new Dictionary<Guid, Type>();
-        
+        private static readonly Dictionary<Type, Type> m_resolvedTypeCache = new Dictionary<Type, Type>();
+        private static readonly object m_resolvedTypeCacheLock = new object();
+
         public static void Initialize(bool loadSdk = true)
         {
             if (loadSdk)
@@ -712,13 +714,13 @@ namespace FrostySdk
             {
                 return 0;
             }
-            
+
             SdkVersionAttribute attr = m_existingAssembly.GetCustomAttribute<SdkVersionAttribute>();
             if (attr == null)
             {
                 return 0;
             }
-                
+
             return (uint)attr.Version;
         }
 
@@ -735,7 +737,7 @@ namespace FrostySdk
                     {
                         continue;
                     }
-                    
+
                     string className = line.Split(' ')[1];
 
                     DbObject classObj = new DbObject();
@@ -762,7 +764,7 @@ namespace FrostySdk
                                 {
                                     continue;
                                 }
-                                
+
                                 string fieldName = line.Split(' ')[1];
 
                                 DbObject fieldObj = new DbObject();
@@ -962,7 +964,7 @@ namespace FrostySdk
                 {
                     continue;
                 }
-                
+
                 List<FieldType> fieldTypes = new List<FieldType>();
                 foreach (DbObject field in classObj.GetValue<DbObject>("fields"))
                 {
@@ -977,12 +979,12 @@ namespace FrostySdk
                             baseType = AddType(baseTypeName);
                             break;
                         case EbxFieldType.Array:
-                        {
-                            EbxFieldType arrayFieldType = (EbxFieldType)((field.GetValue<int>("arrayFlags") >> 4) & 0x1F);
-                            if (arrayFieldType == EbxFieldType.Pointer)
-                                baseType = AddType(baseTypeName);
-                            break;
-                        }
+                            {
+                                EbxFieldType arrayFieldType = (EbxFieldType)((field.GetValue<int>("arrayFlags") >> 4) & 0x1F);
+                                if (arrayFieldType == EbxFieldType.Pointer)
+                                    baseType = AddType(baseTypeName);
+                                break;
+                            }
                     }
 
                     MetaDataType? fieldMetaData = null;
@@ -1001,8 +1003,8 @@ namespace FrostySdk
                             DataOffset = (uint)field.GetValue<int>("offset"),
                             Type = (ushort)field.GetValue<int>("flags")
                         },
-                        (fieldType == EbxFieldType.Array) 
-                            ? new EbxField() 
+                        (fieldType == EbxFieldType.Array)
+                            ? new EbxField()
                             {
                                 DataOffset = 0,
                                 Type = (ushort)field.GetValue<int>("arrayFlags")
@@ -1082,7 +1084,7 @@ namespace FrostySdk
         public static bool IsSubClassOf(object obj, string name)
         {
             Type type = obj.GetType();
-            
+
             return IsSubClassOf(type, name);
         }
 
@@ -1100,7 +1102,7 @@ namespace FrostySdk
         public static bool IsSubClassOf(string type, string name)
         {
             Type sourceType = GetType(type);
-            
+
             return sourceType != null && IsSubClassOf(sourceType, name);
         }
 
@@ -1145,7 +1147,7 @@ namespace FrostySdk
         public static dynamic CreateObject(string name)
         {
             Type newType = GetType(name);
-            
+
             return newType == null ? null : CreateObject(newType);
         }
 
@@ -1155,7 +1157,7 @@ namespace FrostySdk
         public static dynamic CreateObject(Guid guid)
         {
             Type newType = GetType(guid);
-            
+
             return newType == null ? null : CreateObject(newType);
         }
 
@@ -1259,10 +1261,8 @@ namespace FrostySdk
                     }
                 }
 
-                if (m_guidTypeMapping.ContainsKey(guid))
-                {
-                    return m_guidTypeMapping[guid];
-                }
+                if (m_guidTypeMapping.TryGetValue(guid, out Type mappedType))
+                    return mappedType;
             }
             return null;
         }
@@ -1271,46 +1271,42 @@ namespace FrostySdk
 
         internal static dynamic CreateObject(Type inType)
         {
-            EbxClassMetaAttribute attr = inType.GetCustomAttribute<EbxClassMetaAttribute>();
-            object[] args = null;
-
-            if (attr != null)
+            Type resolvedType;
+            lock (m_resolvedTypeCacheLock)
             {
-                switch (attr.Type)
+                if (!m_resolvedTypeCache.TryGetValue(inType, out resolvedType))
                 {
-                    case EbxFieldType.Boolean: inType = typeof(bool); break;
-                    case EbxFieldType.BoxedValueRef: inType = typeof(BoxedValueRef); break;
-                    case EbxFieldType.CString: inType = typeof(CString); break;
-                    case EbxFieldType.Float32: inType = typeof(float); break;
-                    case EbxFieldType.Float64: inType = typeof(double); break;
-                    case EbxFieldType.Guid: inType = typeof(Guid); break;
-                    case EbxFieldType.Int16: inType = typeof(short); break;
-                    case EbxFieldType.Int32: inType = typeof(int); break;
-                    case EbxFieldType.Int64: inType = typeof(long); break;
-                    case EbxFieldType.Int8: inType = typeof(sbyte); break;
-                    case EbxFieldType.ResourceRef: inType = typeof(ResourceRef); break;
-                    case EbxFieldType.Sha1: inType = typeof(Sha1); break;
-                    case EbxFieldType.String: inType = typeof(String); args = new object[1] { new char[1] { ' ' } }; break;
-                    case EbxFieldType.TypeRef: inType = typeof(TypeRef); break;
-                    case EbxFieldType.UInt16: inType = typeof(ushort); break;
-                    case EbxFieldType.UInt32: inType = typeof(uint); break;
-                    case EbxFieldType.UInt64: inType = typeof(ulong); break;
-                    case EbxFieldType.UInt8: inType = typeof(byte); break;
-                    case EbxFieldType.FileRef: inType = typeof(FileRef); break;
+                    resolvedType = inType;
+                    EbxClassMetaAttribute attr = inType.GetCustomAttribute<EbxClassMetaAttribute>();
+                    if (attr != null)
+                    {
+                        switch (attr.Type)
+                        {
+                            case EbxFieldType.Boolean: resolvedType = typeof(bool); break;
+                            case EbxFieldType.BoxedValueRef: resolvedType = typeof(BoxedValueRef); break;
+                            case EbxFieldType.CString: resolvedType = typeof(CString); break;
+                            case EbxFieldType.Float32: resolvedType = typeof(float); break;
+                            case EbxFieldType.Float64: resolvedType = typeof(double); break;
+                            case EbxFieldType.Guid: resolvedType = typeof(Guid); break;
+                            case EbxFieldType.Int16: resolvedType = typeof(short); break;
+                            case EbxFieldType.Int32: resolvedType = typeof(int); break;
+                            case EbxFieldType.Int64: resolvedType = typeof(long); break;
+                            case EbxFieldType.Int8: resolvedType = typeof(sbyte); break;
+                            case EbxFieldType.ResourceRef: resolvedType = typeof(ResourceRef); break;
+                            case EbxFieldType.Sha1: resolvedType = typeof(Sha1); break;
+                            case EbxFieldType.String: resolvedType = typeof(string); break;
+                            case EbxFieldType.TypeRef: resolvedType = typeof(TypeRef); break;
+                            case EbxFieldType.UInt16: resolvedType = typeof(ushort); break;
+                            case EbxFieldType.UInt32: resolvedType = typeof(uint); break;
+                            case EbxFieldType.UInt64: resolvedType = typeof(ulong); break;
+                            case EbxFieldType.UInt8: resolvedType = typeof(byte); break;
+                            case EbxFieldType.FileRef: resolvedType = typeof(FileRef); break;
+                        }
+                    }
+                    m_resolvedTypeCache[inType] = resolvedType;
                 }
             }
-
-            object obj;
-
-            if (args != null)
-            {
-                obj = Activator.CreateInstance(inType, args);
-            }
-            else
-            {
-                obj = Activator.CreateInstance(inType);
-            }
-            return obj;
+            return Activator.CreateInstance(resolvedType);
         }
 
         internal static void InitializeArrays(object obj)
@@ -1437,7 +1433,7 @@ namespace FrostySdk
             // add mandatory attribute
             AddClassMeta(builder, classInfo.Type, classInfo.Alignment, classInfo.Size, classInfo.Namespace, guid);
 
-            if(metaData.HasValue)
+            if (metaData.HasValue)
             {
                 // add custom class attributes
                 MetaDataType meta = metaData.Value;
@@ -1456,7 +1452,7 @@ namespace FrostySdk
                     CustomAttributeBuilder attrBuilder = new CustomAttributeBuilder(typeof(IsInlineAttribute).GetConstructor(Type.EmptyTypes), new object[] { });
                     builder.SetCustomAttribute(attrBuilder);
                 }
-                if(meta.IsAbstract)
+                if (meta.IsAbstract)
                 {
                     CustomAttributeBuilder attrBuilder = new CustomAttributeBuilder(typeof(IsAbstractAttribute).GetConstructor(Type.EmptyTypes), new object[] { });
                     builder.SetCustomAttribute(attrBuilder);

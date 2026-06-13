@@ -75,10 +75,8 @@ namespace FrostySdk
     {
         public int SuperBundleCount => superBundles.Count;
 
-        public IEnumerable<string> SuperBundles
-        {
-            get
-            {
+        public IEnumerable<string> SuperBundles {
+            get {
                 for (int i = 0; i < superBundles.Count; i++)
                     yield return superBundles[i].Name;
             }
@@ -86,10 +84,8 @@ namespace FrostySdk
 
         public int CatalogCount => catalogs.Count;
 
-        public IEnumerable<string> Catalogs
-        {
-            get
-            {
+        public IEnumerable<string> Catalogs {
+            get {
                 for (int i = 0; i < catalogs.Count; i++)
                     yield return catalogs[i].Name;
             }
@@ -108,6 +104,7 @@ namespace FrostySdk
         private Dictionary<string, byte[]> memoryFs = new Dictionary<string, byte[]>();
         private List<string> casFiles = new List<string>();
         private readonly Type deobfuscatorType;
+        private readonly Dictionary<string, string> m_resolvedPathCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public FileSystemManager(string inBasePath)
         {
@@ -150,6 +147,17 @@ namespace FrostySdk
         }
 
         public string ResolvePath(string filename)
+        {
+            if (m_resolvedPathCache.TryGetValue(filename, out string cached))
+                return cached;
+
+            string resolved = ResolvePathInternal(filename);
+            if (resolved != string.Empty)
+                m_resolvedPathCache[filename] = resolved;
+            return resolved;
+        }
+
+        private string ResolvePathInternal(string filename)
         {
 #if ENABLE_LCU
             if (ProfilesLibrary.DataVersion == (int)ProfileVersion.Madden20 && filename.StartsWith("LCU/"))
@@ -811,6 +819,7 @@ namespace FrostySdk
             manifestChunks.Clear();
             catalogs.Clear();
             superBundles.Clear();
+            m_resolvedPathCache.Clear();
 
             ProcessLayouts();
         }

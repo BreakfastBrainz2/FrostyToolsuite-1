@@ -202,10 +202,8 @@ namespace FrostySdk
         public VertexElementFormat Format;
         public byte Offset;
         public byte StreamIndex;
-        public int Size
-        {
-            get
-            {
+        public int Size {
+            get {
                 switch (Format)
                 {
                     case VertexElementFormat.None: return 0;
@@ -279,10 +277,8 @@ namespace FrostySdk
             public VertexElementFormat Format;
             public byte Offset;
             public byte StreamIndex;
-            public int Size
-            {
-                get
-                {
+            public int Size {
+                get {
                     switch (Format)
                     {
                         case VertexElementFormat.None: return 0;
@@ -354,10 +350,8 @@ namespace FrostySdk
         }
 
         public static int MaxElements => 16;
-        public static int MaxStreams
-        {
-            get
-             {
+        public static int MaxStreams {
+            get {
                 switch (ProfilesLibrary.DataVersion)
                 {
                     case (int)ProfileVersion.NeedForSpeedRivals:
@@ -780,7 +774,6 @@ namespace FrostySdk
 
             while (true)
             {
-                // generate a deterministic unique guid
                 using (NativeWriter writer = new NativeWriter(new MemoryStream()))
                 {
                     using (MemoryStream ms = new MemoryStream())
@@ -803,7 +796,6 @@ namespace FrostySdk
                             AssetClassGuid objGuid = obj.GetInstanceGuid();
                             if (objGuid.ExportedGuid == outGuid)
                             {
-                                // try again
                                 bFound = true;
                                 break;
                             }
@@ -887,8 +879,6 @@ namespace FrostySdk
                     int index = 0;
                     while (index < texture.FirstMip)
                     {
-                        // the range has a minimum size of 0x10000
-                        // the logical offset and size dont have a minimum size
                         if (second > 0x10000)
                         {
                             first += texture.MipSizes[index];
@@ -930,10 +920,8 @@ namespace FrostySdk
             }
         }
 
-        private static int MaxBufferSize
-        {
-            get
-            {
+        private static int MaxBufferSize {
+            get {
                 if (ProfilesLibrary.IsLoaded(ProfileVersion.Fifa18, ProfileVersion.Fifa19, ProfileVersion.Fifa20, ProfileVersion.Fifa21, ProfileVersion.Fifa22))
                     return 0x40000;
                 return 0x10000;
@@ -1047,12 +1035,10 @@ namespace FrostySdk
                         {
                             if (total + offset == texture.MipSizes[0])
                             {
-                                // offset of second mip in compressed chunk
                                 texture.FirstMipOffset = texture.SecondMipOffset = (uint)compSize;
                             }
                             else if (total + offset == (texture.MipSizes[0] + texture.MipSizes[1]))
                             {
-                                // offset of third mip in compressed chunk
                                 texture.SecondMipOffset = (uint)compSize;
                             }
                         }
@@ -1119,7 +1105,6 @@ namespace FrostySdk
             GCHandle ptr2 = GCHandle.Alloc(compBuffer, GCHandleType.Pinned);
             ZLib.ZStream stream = new ZLib.ZStream();
 
-            // calculate size
             IntPtr streamPtr = Marshal.AllocHGlobal(Marshal.SizeOf(stream));
             stream.avail_in = (uint)buffer.Length;
             stream.next_in = ptr1.AddrOfPinnedObject();
@@ -1130,15 +1115,12 @@ namespace FrostySdk
             int retCode = ZLib.DeflateInit(streamPtr, 9, "1.2.11", Marshal.SizeOf<ZLib.ZStream>());
             retCode = ZLib.Deflate(streamPtr, ZLib.Z_FINISH);
 
-            // copy out size
             stream = Marshal.PtrToStructure<ZLib.ZStream>(streamPtr);
             size = stream.total_out;
 
-            // free
             retCode = ZLib.DeflateEnd(streamPtr);
             Marshal.FreeHGlobal(streamPtr);
 
-            // if its too big
             if (size > (ulong)MaxBufferSize)
             {
                 uncompressed = true;
@@ -1172,25 +1154,21 @@ namespace FrostySdk
                 ProfileVersion.PlantsVsZombiesBattleforNeighborville, ProfileVersion.Madden22,
                 ProfileVersion.Madden23))
             {
-                // Kraken
                 compressCode = 0x1170;
                 size = (ulong)Oodle.Compress2(Oodle.OodleFormat.Kraken, ptr1.AddrOfPinnedObject(), buffer.Length, ptr2.AddrOfPinnedObject(), Oodle.OodleCompressionLevel.Optimal3, Oodle.GetOptions(Oodle.OodleFormat.Kraken, Oodle.OodleCompressionLevel.Optimal3));
             }
             else if (ProfilesLibrary.IsLoaded(ProfileVersion.Fifa21, ProfileVersion.Fifa22,
                 ProfileVersion.NeedForSpeedUnbound))
             {
-                // Leviathan
                 compressCode = 0x1970;
                 size = (ulong)Oodle.Compress2(Oodle.OodleFormat.Leviathan, ptr1.AddrOfPinnedObject(), buffer.Length, ptr2.AddrOfPinnedObject(), Oodle.OodleCompressionLevel.Optimal3, Oodle.GetOptions(Oodle.OodleFormat.Leviathan, Oodle.OodleCompressionLevel.Optimal3));
             }
             else
             {
-                // Selkie
                 compressCode = 0x1570;
                 size = (ulong)Oodle.Compress(Oodle.OodleFormat.Selkie, ptr1.AddrOfPinnedObject(), buffer.Length, ptr2.AddrOfPinnedObject(), Oodle.OodleCompressionLevel.Optimal3);
             }
 
-            // if its too big
             if (size > (ulong)buffer.Length)
             {
                 uncompressed = true;
@@ -1305,31 +1283,98 @@ namespace FrostySdk
             return (uint)((int)((part1 & 0xFFFF0000) + (part1 << 16)) | ((ushort)part2 + (part2 >> 16)));
         }
 
-        /// <summary>
-        /// Loads all resolved hashes that are found within the specified file of <paramref name="path"/>.
-        /// </summary>
-        /// <param name="path">The file to be read from for hashes.</param>
+
+        private static unsafe int FastHashString(string data)
+        {
+            if (data.Length == 0) return 5381;
+
+            int hash = 5381;
+            const int prime = 33;
+
+            int maxBytes = Encoding.UTF8.GetMaxByteCount(data.Length);
+
+            if (maxBytes <= 4096)
+            {
+                byte* buffer = stackalloc byte[maxBytes];
+                fixed (char* pData = data)
+                {
+                    int byteCount = Encoding.UTF8.GetBytes(pData, data.Length, buffer, maxBytes);
+                    for (int i = 0; i < byteCount; i++)
+                    {
+                        hash = (hash * prime) ^ buffer[i];
+                    }
+                }
+                return hash;
+            }
+
+            byte[] bytes = Encoding.UTF8.GetBytes(data);
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                hash = (hash * prime) ^ bytes[i];
+            }
+            return hash;
+        }
+
         public static void LoadStringList(string path = "strings.txt", ILogger logger = null)
         {
             if (!File.Exists(path))
             {
                 return;
             }
-
             strings.Clear();
 
-            using (NativeReader reader = new NativeReader(new FileStream(path, FileMode.Open, FileAccess.Read)))
-            {
-                while (reader.Position < reader.Length)
-                {
-                    string currentString = reader.ReadLine();
-                    int hash = Fnv1.HashString(currentString);
-                    if (!strings.ContainsKey(hash))
-                    {
-                        strings.Add(hash, currentString);
-                    }
+            const int bufferSize = 1024 * 1024;
 
-                    logger?.Log("progress:" + (double)reader.Position / (double)reader.Length * 100.0);
+            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, FileOptions.SequentialScan))
+            {
+                long totalLength = fs.Length;
+                if (totalLength == 0)
+                {
+                    return;
+                }
+
+                using (StreamReader reader = new StreamReader(fs, Encoding.UTF8, true, bufferSize))
+                {
+                    string currentString;
+
+                    if (logger != null)
+                    {
+                        double lastReportedProgress = -1.0;
+                        int lineCount = 0;
+
+                        while ((currentString = reader.ReadLine()) != null)
+                        {
+                            int hash = FastHashString(currentString);
+
+                            if (!strings.ContainsKey(hash))
+                            {
+                                strings.Add(hash, currentString);
+                            }
+
+                            if ((++lineCount & 4095) == 0)
+                            {
+                                double currentProgress = ((double)fs.Position / totalLength) * 100.0;
+                                if (currentProgress - lastReportedProgress >= 1.0)
+                                {
+                                    logger.Log("progress:" + currentProgress);
+                                    lastReportedProgress = currentProgress;
+                                }
+                            }
+                        }
+
+                        logger.Log("progress:100.0");
+                    }
+                    else
+                    {
+                        while ((currentString = reader.ReadLine()) != null)
+                        {
+                            int hash = FastHashString(currentString);
+                            if (!strings.ContainsKey(hash))
+                            {
+                                strings.Add(hash, currentString);
+                            }
+                        }
+                    }
                 }
             }
         }

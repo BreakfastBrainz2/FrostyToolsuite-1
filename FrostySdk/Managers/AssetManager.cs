@@ -103,6 +103,24 @@ namespace FrostySdk.Managers
 
             private void FilterBinaryBundleData(DbObject baseList, DbObject deltaList, string listName, Dictionary<string, byte[]> dataFiles)
             {
+                // Build a sha1->entry lookup from the base list once so each delta
+                // entry is resolved in o(1) instead of scanning the whole base list 
+                Dictionary<Sha1, DbObject> baseBySha1 = null;
+                if (baseList != null)
+                {
+                    DbObject baseEntries = baseList.GetValue<DbObject>(listName);
+                    if (baseEntries != null)
+                    {
+                        baseBySha1 = new Dictionary<Sha1, DbObject>();
+                        foreach (DbObject baseEntry in baseEntries)
+                        {
+                            Sha1 baseSha1 = baseEntry.GetValue<Sha1>("sha1");
+                            if (!baseBySha1.ContainsKey(baseSha1))
+                                baseBySha1.Add(baseSha1, baseEntry);
+                        }
+                    }
+                }
+
                 foreach (DbObject entry in deltaList.GetValue<DbObject>(listName))
                 {
                     Sha1 sha1 = entry.GetValue<Sha1>("sha1");
@@ -114,21 +132,14 @@ namespace FrostySdk.Managers
                         continue;
 
                     bool bFound = false;
-                    if (baseList != null)
+                    if (baseBySha1 != null && baseBySha1.TryGetValue(sha1, out DbObject matchedBase))
                     {
-                        foreach (DbObject baseEntry in baseList.GetValue<DbObject>(listName))
-                        {
-                            if (baseEntry.GetValue<Sha1>("sha1") == sha1)
-                            {
-                                entry.SetValue("size", baseEntry.GetValue<long>("size"));
-                                entry.SetValue("originalSize", baseEntry.GetValue<long>("originalSize"));
-                                entry.SetValue("offset", baseEntry.GetValue<long>("offset"));
-                                entry.RemoveValue("data");
+                        entry.SetValue("size", matchedBase.GetValue<long>("size"));
+                        entry.SetValue("originalSize", matchedBase.GetValue<long>("originalSize"));
+                        entry.SetValue("offset", matchedBase.GetValue<long>("offset"));
+                        entry.RemoveValue("data");
 
-                                bFound = true;
-                                break;
-                            }
-                        }
+                        bFound = true;
                     }
 
                     if (!bFound)
@@ -160,10 +171,10 @@ namespace FrostySdk.Managers
         #endregion
 
         private const ulong CacheMagic = 0x02005954534F5246;
-       /*
-          Cache Versions:
-            4 - Nothing changed in the format just bumped up that the cache gets regenerated, bc bundled chunks did not always had their logical offset/size stored
-        */
+        /*
+           Cache Versions:
+             4 - Nothing changed in the format just bumped up that the cache gets regenerated, bc bundled chunks did not always had their logical offset/size stored
+         */
         private const uint CacheVersion = 4;
 
         private FileSystemManager m_fileSystem;
@@ -693,7 +704,7 @@ namespace FrostySdk.Managers
             entry.ModifiedEntry.IsInline = false;
             entry.IsDirty = true;
             entry.IsAdded = true;
-			entry.AddedBundles.AddRange(bundles);
+            entry.AddedBundles.AddRange(bundles);
 
             m_ebxList.Add(keyName, entry);
             m_ebxGuidList.Add(entry.Guid, entry);
@@ -740,7 +751,7 @@ namespace FrostySdk.Managers
             };
 
             entry.ModifiedEntry.Sha1 = GenerateSha1(entry.ModifiedEntry.Data);
-			entry.AddedBundles.AddRange(bundles);
+            entry.AddedBundles.AddRange(bundles);
 
             m_resList.Add(entry.Name, entry);
             m_resRidList.Add(entry.ResRid, entry);
@@ -1200,7 +1211,7 @@ namespace FrostySdk.Managers
                             bFound = true;
                             break;
                         }
-						else if (entry.AddedBundles.Contains(bindex))
+                        else if (entry.AddedBundles.Contains(bindex))
                         {
                             bFound = true;
                             break;
@@ -2070,7 +2081,7 @@ namespace FrostySdk.Managers
                     {
                         entry.SuperBundles.Add(reader.ReadInt());
                     }
-                    
+
                     bool hasExtraData = reader.ReadBoolean();
                     if (hasExtraData)
                     {
