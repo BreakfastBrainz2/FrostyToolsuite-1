@@ -140,6 +140,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RimeWidgetBlueprintEditor",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlueprintEditorPlugin", "..\Plugins\BlueprintEditorPlugin\BlueprintEditorPlugin.csproj", "{5317E543-7B9E-201B-55B6-666D950A8E66}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssetBankPlugin", "..\Plugins\AssetBankPlugin\AssetBankPlugin.csproj", "{A721694B-4D2F-8B6C-21C8-E46D1C843E29}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Developer - Debug|x64 = Developer - Debug|x64
@@ -709,6 +711,16 @@ Global
 		{5317E543-7B9E-201B-55B6-666D950A8E66}.Release - Final|x64.Build.0 = Release - Final|x64
 		{5317E543-7B9E-201B-55B6-666D950A8E66}.Release|x64.ActiveCfg = Release - Final|x64
 		{5317E543-7B9E-201B-55B6-666D950A8E66}.Release|x64.Build.0 = Release - Final|x64
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Developer - Debug|x64.ActiveCfg = Developer - Debug|x64
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Developer - Debug|x64.Build.0 = Developer - Debug|x64
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release - Alpha|x64.ActiveCfg = Release - Alpha|x64
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release - Alpha|x64.Build.0 = Release - Alpha|x64
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release - Beta|x64.ActiveCfg = Release - Beta|x64
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release - Beta|x64.Build.0 = Release - Beta|x64
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release - Final|x64.ActiveCfg = Release - Final|x64
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release - Final|x64.Build.0 = Release - Final|x64
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release|x64.ActiveCfg = Release - Alpha|x64
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release|x64.Build.0 = Release - Alpha|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -762,6 +774,7 @@ Global
 		{2842AED3-2419-7E58-D598-BEB3DC73FCA6} = {492048B6-848D-4675-A9BF-34A4751303F2}
 		{973CC29C-0845-EEED-EE19-AC2943057D93} = {492048B6-848D-4675-A9BF-34A4751303F2}
 		{5317E543-7B9E-201B-55B6-666D950A8E66} = {492048B6-848D-4675-A9BF-34A4751303F2}
+		{A721694B-4D2F-8B6C-21C8-E46D1C843E29} = {492048B6-848D-4675-A9BF-34A4751303F2}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C0B22EF1-4C3F-45B9-9F08-9793ED912199}
