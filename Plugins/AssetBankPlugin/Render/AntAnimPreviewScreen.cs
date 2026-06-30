@@ -26,11 +26,11 @@ namespace AssetBankPlugin.Render
 
         private volatile bool _forceSkeletonUpdate = false;
 
-        public void LoadSkeleton(MeshRenderSkeleton skeleton)
+        /*public void LoadSkeleton(MeshRenderSkeleton skeleton)
         {
             CurrentSkeleton = skeleton;
-            //VisualizeSkeleton = skeleton;
-        }
+            VisualizeSkeleton = skeleton;
+        }*/
 
         public void LoadAnimation(MeshRenderAnim anim, InternalAnimation internalAnim, int endFrame)
         {

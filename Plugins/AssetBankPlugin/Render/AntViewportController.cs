@@ -116,7 +116,7 @@ namespace AssetBankPlugin
 
                     Dispatcher.Invoke(() =>
                     {
-                        m_screen.LoadSkeleton(renderSkel);
+                        //m_screen.LoadSkeleton(renderSkel);
                         m_screen.LoadAnimation(renderAnim, internalAnim, endFrame);
 
                         if (m_playPauseBtn != null) m_playPauseBtn.IsChecked = true;
