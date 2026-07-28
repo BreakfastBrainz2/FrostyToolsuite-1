@@ -1,8 +1,19 @@
 ﻿v1.0.7 (Virjoinga's fork)
 --------
-This fork is based on HarGabt's fork and was designed for Plants vs. Zombies: Battle for Neighborville support, and will be discontinued in favour of Frosty v2.0, which as of now is still a WIP, and which has no estimated time of release.
+This fork is based on HarGabt's fork and was designed for Plants vs. Zombies: Battle for Neighborville support.
 
 Changes in my fork:
+
+(2026.07.28)
+--------
+- Major code optimization:
+	- Profile creation should be much faster.
+	- Profile loading should be much faster.
+	- Loading/saving a mod should be much faster.
+	- Opening files should be much faster.
+- Animation Editor.
+- Skeleton rendering in mesh view.
+All these changes wouldn't be possible without the help of Lala on Discord.
 
 (2026.05.17)
 --------
