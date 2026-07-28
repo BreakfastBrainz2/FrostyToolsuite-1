@@ -65,6 +65,7 @@ namespace Frosty.ModSupport
             }
 
             private static readonly object locker = new object();
+            private static readonly Comparison<List<byte[]>> s_hashDictComparer = (x, y) => y.Count.CompareTo(x.Count);
 
             public SuperBundleInfo SuperBundleInfo;
             public bool HasErrored => Exception != null;
@@ -295,9 +296,10 @@ namespace Frosty.ModSupport
                                     if (modBundle.Modify.Ebx.Contains(name))
                                     {
                                         EbxAssetEntry entry = parent.m_modifiedEbx[name];
+                                        byte[] ebxData = parent.m_archiveData[entry.Sha1].Data;
 
                                         // get next cas (if one hasnt been obtained or the current one will exceed 1gb)
-                                        if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
+                                        if (casWriter == null || casWriter.Length + ebxData.Length > 1073741824)
                                         {
                                             casWriter?.Close();
                                             casWriter = GetNextCas(catalog, out casFileIndex);
@@ -314,15 +316,16 @@ namespace Frosty.ModSupport
                                             ebx.SetValue("patch", true);
                                         }
 
-                                        casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
+                                        casWriter.Write(ebxData);
                                     }
                                 }
                                 foreach (string name in modBundle.Add.Ebx)
                                 {
                                     EbxAssetEntry entry = parent.m_modifiedEbx[name];
+                                    byte[] addEbxData = parent.m_archiveData[entry.Sha1].Data;
 
                                     // get next cas (if one hasnt been obtained or the current one will exceed 1gb)
-                                    if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
+                                    if (casWriter == null || casWriter.Length + addEbxData.Length > 1073741824)
                                     {
                                         casWriter?.Close();
                                         casWriter = GetNextCas(catalog, out casFileIndex);
@@ -342,7 +345,7 @@ namespace Frosty.ModSupport
                                     }
                                     bundleObj.GetValue<DbObject>("ebx").Add(ebx);
 
-                                    casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
+                                    casWriter.Write(addEbxData);
                                 }
 
                                 foreach (DbObject res in bundleObj.GetValue<DbObject>("res"))
@@ -351,9 +354,10 @@ namespace Frosty.ModSupport
                                     if (modBundle.Modify.Res.Contains(name))
                                     {
                                         ResAssetEntry entry = parent.m_modifiedRes[name];
+                                        byte[] resData = parent.m_archiveData[entry.Sha1].Data;
 
                                         // get next cas (if one hasnt been obtained or the current one will exceed 1gb)
-                                        if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
+                                        if (casWriter == null || casWriter.Length + resData.Length > 1073741824)
                                         {
                                             casWriter?.Close();
                                             casWriter = GetNextCas(catalog, out casFileIndex);
@@ -373,15 +377,16 @@ namespace Frosty.ModSupport
                                             res.SetValue("patch", true);
                                         }
 
-                                        casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
+                                        casWriter.Write(resData);
                                     }
                                 }
                                 foreach (string name in modBundle.Add.Res)
                                 {
                                     ResAssetEntry entry = parent.m_modifiedRes[name];
+                                    byte[] addResData = parent.m_archiveData[entry.Sha1].Data;
 
                                     // get next cas (if one hasnt been obtained or the current one will exceed 1gb)
-                                    if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
+                                    if (casWriter == null || casWriter.Length + addResData.Length > 1073741824)
                                     {
                                         casWriter?.Close();
                                         casWriter = GetNextCas(catalog, out casFileIndex);
@@ -404,7 +409,7 @@ namespace Frosty.ModSupport
                                     }
                                     bundleObj.GetValue<DbObject>("res").Add(res);
 
-                                    casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
+                                    casWriter.Write(addResData);
                                 }
 
                                 DbObject chunkMeta = bundleObj.GetValue<DbObject>("chunkMeta");
@@ -435,11 +440,12 @@ namespace Frosty.ModSupport
 
                                             DbObject meta = chunkMeta.Find<DbObject>((object a) => { return (a as DbObject).GetValue<int>("h32") == entry.H32; });
 
-                                            byte[] data = parent.m_archiveData[entry.Sha1].Data;
+                                            byte[] rawChunkData = parent.m_archiveData[entry.Sha1].Data;
+                                            byte[] data = rawChunkData;
                                             if (entry.LogicalOffset != 0)
                                             {
                                                 data = new byte[entry.RangeEnd - entry.RangeStart];
-                                                Array.Copy(parent.m_archiveData[entry.Sha1].Data, entry.RangeStart, data, 0, data.Length);
+                                                Buffer.BlockCopy(rawChunkData, (int)entry.RangeStart, data, 0, data.Length);
                                             }
 
                                             chunk.SetValue("sha1", entry.Sha1);
@@ -486,11 +492,12 @@ namespace Frosty.ModSupport
                                         casWriter = GetNextCas(catalog, out casFileIndex);
                                     }
 
-                                    byte[] data = parent.m_archiveData[entry.Sha1].Data;
+                                    byte[] rawAddChunkData = parent.m_archiveData[entry.Sha1].Data;
+                                    byte[] data = rawAddChunkData;
                                     if (entry.LogicalOffset != 0)
                                     {
                                         data = new byte[entry.RangeEnd - entry.RangeStart];
-                                        Array.Copy(parent.m_archiveData[entry.Sha1].Data, entry.RangeStart, data, 0, data.Length);
+                                        Buffer.BlockCopy(rawAddChunkData, (int)entry.RangeStart, data, 0, data.Length);
                                     }
 
                                     uint chunkOffset = (uint)casWriter.Position;
@@ -521,8 +528,7 @@ namespace Frosty.ModSupport
                                     // Ensure chunk is in the SuperBundle's TOC chunks dictionary
                                     if (!chunks.ContainsKey(name))
                                     {
-                                        byte[] fullData = parent.m_archiveData[entry.Sha1].Data;
-                                        if (casWriter == null || casWriter.Length + fullData.Length > 1073741824)
+                                        if (casWriter == null || casWriter.Length + rawAddChunkData.Length > 1073741824)
                                         {
                                             casWriter?.Close();
                                             casWriter = GetNextCas(catalog, out casFileIndex);
@@ -542,11 +548,11 @@ namespace Frosty.ModSupport
                                                 CatalogIndex = catalogIndex,
                                                 CasIndex = (byte)casFileIndex,
                                                 Offset = fullChunkOffset,
-                                                Size = (uint)fullData.Length // Use FULL size
+                                                Size = (uint)rawAddChunkData.Length
                                             }
                                         };
                                         chunks.Add(name, chunkInfo);
-                                        casWriter.Write(fullData); // Write FULL data for the TOC
+                                        casWriter.Write(rawAddChunkData);
                                     }
                                 }
 
@@ -742,8 +748,9 @@ namespace Frosty.ModSupport
                                     foreach (string name in modBundle.Add.Ebx)
                                     {
                                         EbxAssetEntry entry = parent.m_modifiedEbx[name];
+                                        byte[] newBundleEbxData = parent.m_archiveData[entry.Sha1].Data;
 
-                                        if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
+                                        if (casWriter == null || casWriter.Length + newBundleEbxData.Length > 1073741824)
                                         {
                                             casWriter?.Close();
                                             casWriter = GetNextCas(catalog, out casFileIndex);
@@ -761,15 +768,16 @@ namespace Frosty.ModSupport
                                             ebx.SetValue("patch", true);
 
                                         bundleObj.GetValue<DbObject>("ebx").Add(ebx);
-                                        casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
+                                        casWriter.Write(newBundleEbxData);
                                     }
 
                                     // Write Res assets
                                     foreach (string name in modBundle.Add.Res)
                                     {
                                         ResAssetEntry entry = parent.m_modifiedRes[name];
+                                        byte[] newBundleResData = parent.m_archiveData[entry.Sha1].Data;
 
-                                        if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
+                                        if (casWriter == null || casWriter.Length + newBundleResData.Length > 1073741824)
                                         {
                                             casWriter?.Close();
                                             casWriter = GetNextCas(catalog, out casFileIndex);
@@ -790,7 +798,7 @@ namespace Frosty.ModSupport
                                             res.SetValue("patch", true);
 
                                         bundleObj.GetValue<DbObject>("res").Add(res);
-                                        casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
+                                        casWriter.Write(newBundleResData);
                                     }
 
                                     // Write Chunk assets
@@ -798,12 +806,13 @@ namespace Frosty.ModSupport
                                     foreach (Guid chunkId in modBundle.Add.Chunks)
                                     {
                                         ChunkAssetEntry entry = parent.m_modifiedChunks[chunkId];
-                                        byte[] data = parent.m_archiveData[entry.Sha1].Data;
+                                        byte[] rawNewChunkData = parent.m_archiveData[entry.Sha1].Data;
+                                        byte[] data = rawNewChunkData;
 
                                         if (entry.LogicalOffset != 0)
                                         {
                                             data = new byte[entry.RangeEnd - entry.RangeStart];
-                                            Array.Copy(parent.m_archiveData[entry.Sha1].Data, entry.RangeStart, data, 0, data.Length);
+                                            Buffer.BlockCopy(rawNewChunkData, (int)entry.RangeStart, data, 0, data.Length);
                                         }
 
                                         if (casWriter == null || casWriter.Length + data.Length > 1073741824)
@@ -840,8 +849,7 @@ namespace Frosty.ModSupport
                                         // Register chunk in the SuperBundle's TOC chunks dictionary
                                         if (!chunks.ContainsKey(chunkId))
                                         {
-                                            byte[] fullData = parent.m_archiveData[entry.Sha1].Data;
-                                            if (casWriter == null || casWriter.Length + fullData.Length > 1073741824)
+                                            if (casWriter == null || casWriter.Length + rawNewChunkData.Length > 1073741824)
                                             {
                                                 casWriter?.Close();
                                                 casWriter = GetNextCas(catalog, out casFileIndex);
@@ -861,11 +869,11 @@ namespace Frosty.ModSupport
                                                     CatalogIndex = catalogIndex,
                                                     CasIndex = (byte)casFileIndex,
                                                     Offset = fullChunkOffset,
-                                                    Size = (uint)fullData.Length // Use FULL size
+                                                    Size = (uint)rawNewChunkData.Length
                                                 }
                                             };
                                             chunks.Add(chunkId, chunkInfo);
-                                            casWriter.Write(fullData); // Write FULL data for the TOC
+                                            casWriter.Write(rawNewChunkData);
                                         }
                                     }
 
@@ -1040,8 +1048,10 @@ namespace Frosty.ModSupport
                                         catalog = m_catalog;
                                     }
 
+                                    byte[] sbChunkData = parent.m_archiveData[entry.Sha1].Data;
+
                                     // get next cas (if one hasnt been obtained or the current one will exceed 1gb)
-                                    if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
+                                    if (casWriter == null || casWriter.Length + sbChunkData.Length > 1073741824)
                                     {
                                         casWriter?.Close();
                                         casWriter = GetNextCas(catalog, out casFileIndex);
@@ -1052,9 +1062,9 @@ namespace Frosty.ModSupport
                                     chunkInfo.CasFileInfo.CatalogIndex = (byte)parent.m_fs.GetCatalogIndex(catalog);
                                     chunkInfo.CasFileInfo.CasIndex = (byte)casFileIndex;
                                     chunkInfo.CasFileInfo.Offset = (uint)casWriter.Position;
-                                    chunkInfo.CasFileInfo.Size = (uint)parent.m_archiveData[entry.Sha1].Data.Length;
+                                    chunkInfo.CasFileInfo.Size = (uint)sbChunkData.Length;
 
-                                    casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
+                                    casWriter.Write(sbChunkData);
                                 }
                                 else
                                 {
@@ -1078,6 +1088,7 @@ namespace Frosty.ModSupport
                                 chunks.Add(chunkId, chunkInfo);
 
                                 ChunkAssetEntry entry = parent.m_modifiedChunks[chunkId];
+                                byte[] sbAddChunkData = parent.m_archiveData[entry.Sha1].Data;
 
                                 string catalog;
                                 if (chunkInfo.SplitIndex != -1)
@@ -1091,7 +1102,7 @@ namespace Frosty.ModSupport
                                     catalog = m_catalog;
                                 }
 
-                                if (casWriter == null || casWriter.Length + parent.m_archiveData[entry.Sha1].Data.Length > 1073741824)
+                                if (casWriter == null || casWriter.Length + sbAddChunkData.Length > 1073741824)
                                 {
                                     casWriter?.Close();
                                     casWriter = GetNextCas(catalog, out casFileIndex);
@@ -1102,13 +1113,13 @@ namespace Frosty.ModSupport
                                 chunkInfo.CasFileInfo.CatalogIndex = (byte)parent.m_fs.GetCatalogIndex(catalog);
                                 chunkInfo.CasFileInfo.CasIndex = (byte)casFileIndex;
                                 chunkInfo.CasFileInfo.Offset = (uint)casWriter.Position;
-                                chunkInfo.CasFileInfo.Size = (uint)parent.m_archiveData[entry.Sha1].Data.Length;
+                                chunkInfo.CasFileInfo.Size = (uint)sbAddChunkData.Length;
 
-                                casWriter.Write(parent.m_archiveData[entry.Sha1].Data);
+                                casWriter.Write(sbAddChunkData);
                             }
                         }
 
-                        if (isDefaultTocModified || isSplitTocModified.FirstOrDefault(b => b))
+                        if (isDefaultTocModified || Array.Exists(isSplitTocModified, b => b))
                         {
                             foreach (BundleInfo bundleInfo in bundles.Values)
                             {
@@ -1763,18 +1774,21 @@ namespace Frosty.ModSupport
 
             private string GetCatalog(SuperBundleInfo sb, IEnumerable<CatalogInfo> catalogs)
             {
+                CatalogInfo first = null;
                 foreach (CatalogInfo catalog in catalogs)
                 {
-                    if (catalog.SuperBundles.Keys.Contains(sb.Name) && catalog.SuperBundles[sb.Name].Item1)
+                    if (first == null) first = catalog;
+                    if (catalog.SuperBundles.TryGetValue(sb.Name, out var sbVal) && sbVal.Item1)
                     {
                         return catalog.Name;
                     }
                 }
-                return catalogs.First().Name;
+                return first?.Name;
             }
 
             private void ReadToc(NativeReader reader, ref Dictionary<int, BundleInfo> bundles, ref Dictionary<Guid, ChunkInfo> chunks, ref InternalFlags tocFlags, bool patch, int splitIndex = -1)
             {
+                string sbName = splitIndex != -1 ? SuperBundleInfo.Name.Replace("win32", SuperBundleInfo.SplitSuperBundles[splitIndex]) : SuperBundleInfo.Name;
                 uint startPos = (uint)reader.Position;
 
                 uint bundleHashMapOffset = reader.ReadUInt(Endian.Big) + startPos;
@@ -1797,7 +1811,7 @@ namespace Frosty.ModSupport
 
                 if (flags.HasFlag(Flags.HasBaseBundles) || flags.HasFlag(Flags.HasBaseChunks))
                 {
-                    string tocPath = parent.m_fs.ResolvePath(string.Format("native_data/{0}.toc", splitIndex != -1 ? SuperBundleInfo.Name.Replace("win32", SuperBundleInfo.SplitSuperBundles[splitIndex]) : SuperBundleInfo.Name));
+                    string tocPath = parent.m_fs.ResolvePath(string.Format("native_data/{0}.toc", sbName));
                     using (NativeReader baseReader = new NativeReader(new FileStream(tocPath, FileMode.Open, FileAccess.Read), parent.m_fs.CreateDeobfuscator()))
                     {
                         InternalFlags discard = 0;
@@ -1864,24 +1878,18 @@ namespace Frosty.ModSupport
                         }
 
                         int hash = Fnv1.HashString(name.ToLower());
-                        if (bundles.ContainsKey(hash))
-                        {
-                            bundles.Remove(hash);
-                        }
-
-                        BundleInfo bi = new BundleInfo()
-                        {
-                            Name = name,
-                            Offset = bundleOffset,
-                            Size = bundleSize,
-                            IsPatch = patch,
-                            SbName = splitIndex != -1 ? SuperBundleInfo.Name.Replace("win32", SuperBundleInfo.SplitSuperBundles[splitIndex]) : SuperBundleInfo.Name,
-                            SplitIndex = splitIndex
-                        };
 
                         if (bundleSize != uint.MaxValue && bundleOffset != -1)
                         {
-                            bundles.Add(hash, bi);
+                            bundles[hash] = new BundleInfo()
+                            {
+                                Name = name,
+                                Offset = bundleOffset,
+                                Size = bundleSize,
+                                IsPatch = patch,
+                                SbName = sbName,
+                                SplitIndex = splitIndex
+                            };
                         }
                     }
                     huffmanDecoder?.Dispose();
@@ -1933,21 +1941,14 @@ namespace Frosty.ModSupport
                         uint offset = reader.ReadUInt(Endian.Big);
                         uint size = reader.ReadUInt(Endian.Big);
 
-                        ChunkInfo ci = new ChunkInfo()
+                        chunks[chunkGuids[i]] = new ChunkInfo()
                         {
                             Guid = chunkGuids[i],
                             IsPatch = patch,
                             CasFileInfo = new CasFileInfo() { IsPatch = isPatch, CatalogIndex = catalogIndex, CasIndex = casIndex, Offset = offset, Size = size },
-                            SbName = splitIndex != -1 ? SuperBundleInfo.Name.Replace("win32", SuperBundleInfo.SplitSuperBundles[splitIndex]) : SuperBundleInfo.Name,
+                            SbName = sbName,
                             SplitIndex = splitIndex
                         };
-
-                        if (chunks.ContainsKey(ci.Guid))
-                        {
-                            chunks.Remove(ci.Guid);
-                        }
-
-                        chunks.Add(ci.Guid, ci);
                     }
                 }
             }
@@ -2007,7 +2008,7 @@ namespace Frosty.ModSupport
 
                     string path = parent.m_fs.GetFilePath(catalogIndex, casIndex, isPatch);
 
-                    using (Stream casStream = new FileStream(parent.m_fs.ResolvePath(path), FileMode.Open, FileAccess.Read))
+                    using (Stream casStream = new FileStream(parent.m_fs.ResolvePath(path), FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.RandomAccess))
                     {
                         byte[] buffer = new byte[size];
                         casStream.Position = offset;
@@ -2130,7 +2131,7 @@ namespace Frosty.ModSupport
                 List<byte[]>[] hashDict = new List<byte[]>[size];
                 for (int i = 0; i < size; i++)
                 {
-                    hashDict[i] = new List<byte[]>();
+                    hashDict[i] = new List<byte[]>(1);
                 }
                 foreach (var key in input.Keys)
                 {
@@ -2138,11 +2139,12 @@ namespace Frosty.ModSupport
                 }
 
                 // sort them so that the ones with the most duplicates are first
-                Array.Sort(hashDict, (List<byte[]> x, List<byte[]> y) => y.Count.CompareTo(x.Count));
+                Array.Sort(hashDict, s_hashDictComparer);
 
                 bool[] used = new bool[size];
 
                 List<int> indices;
+                HashSet<int> indicesSet = new HashSet<int>();
 
                 int hash = 0;
                 // process hash conflicts
@@ -2156,6 +2158,7 @@ namespace Frosty.ModSupport
                     }
 
                     indices = new List<int>(duplicateCount);
+                    indicesSet.Clear();
 
                     // find seed for which all hashes are unique and not already used
                     uint seed = 1;
@@ -2163,15 +2166,17 @@ namespace Frosty.ModSupport
                     while (i < duplicateCount)
                     {
                         int index = (int)(Hash(hashDict[hash][i], seed) % size);
-                        if (used[index] || indices.FindIndex(k => k == index) != -1)
+                        if (used[index] || indicesSet.Contains(index))
                         {
                             seed++;
                             i = 0;
                             indices.Clear();
+                            indicesSet.Clear();
                         }
                         else
                         {
                             indices.Add(index);
+                            indicesSet.Add(index);
                             i++;
                         }
                     }
@@ -2228,13 +2233,13 @@ namespace Frosty.ModSupport
 
             private uint Hash(byte[] bytes, uint offset = 0x811c9dc5)
             {
-                uint prime = 0x01000193;
+                const uint prime = 0x01000193;
 
                 uint hash = offset;
 
-                for (int i = 0; i < bytes.Length; i++)
+                foreach (byte b in bytes)
                 {
-                    hash = (hash * prime) ^ (uint)(sbyte)bytes[i];
+                    hash = (hash * prime) ^ (uint)(sbyte)b;
                 }
 
                 return hash % prime;

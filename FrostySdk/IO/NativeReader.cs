@@ -13,9 +13,6 @@ namespace FrostySdk.IO
 
     public class NativeReader : IDisposable
     {
-        [ThreadStatic]
-        private static char[] _stringBuffer;
-
         public Stream BaseStream => stream;
 
         public virtual long Position {
@@ -30,9 +27,12 @@ namespace FrostySdk.IO
         protected Stream stream;
         protected IDeobfuscator deobfuscator;
         protected byte[] buffer;
-        protected char[] charBuffer;
         protected long streamLength;
-        protected Encoding wideDecoder;
+
+        // Instance level reusable buffers to completely eliminate heap allocations during string parsing.
+        // Threasafe across different reader instances, but not concurrent or reentrant on the same instance.
+        private char[] _stringBuffer;
+        private byte[] _stringByteBuffer;
 
         public NativeReader(Stream inStream)
         {
@@ -40,9 +40,7 @@ namespace FrostySdk.IO
             if (stream != null)
                 streamLength = stream.Length;
 
-            wideDecoder = Encoding.Unicode;
             buffer = new byte[20];
-            charBuffer = new char[2];
         }
 
         public NativeReader(Stream inStream, IDeobfuscator inDeobfuscator)
@@ -63,13 +61,12 @@ namespace FrostySdk.IO
                 return reader.ReadToEnd();
         }
 
-        #region -- Basic Types --
+        #region Basic Types
 
         public char ReadWideChar()
         {
             FillBuffer(2);
-            wideDecoder.GetChars(buffer, 0, 2, charBuffer, 0);
-            return charBuffer[0];
+            return (char)(buffer[0] | (buffer[1] << 8));
         }
 
         public bool ReadBoolean() => ReadByte() == 1;
@@ -89,88 +86,106 @@ namespace FrostySdk.IO
         public short ReadShort(Endian inEndian = Endian.Little)
         {
             FillBuffer(2);
+            var b = buffer;
             if (inEndian == Endian.Little)
-                return (short)(buffer[0] | buffer[1] << 8);
-            return (short)(buffer[1] | buffer[0] << 8);
+                return (short)(b[0] | (b[1] << 8));
+            return (short)(b[1] | (b[0] << 8));
         }
 
         public ushort ReadUShort(Endian inEndian = Endian.Little)
         {
             FillBuffer(2);
+            var b = buffer;
             if (inEndian == Endian.Little)
-                return (ushort)(buffer[0] | buffer[1] << 8);
-            return (ushort)(buffer[1] | buffer[0] << 8);
+                return (ushort)(b[0] | (b[1] << 8));
+            return (ushort)(b[1] | (b[0] << 8));
         }
 
         public int ReadInt(Endian inEndian = Endian.Little)
         {
             FillBuffer(4);
+            var b = buffer;
             if (inEndian == Endian.Little)
-                return (int)(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
-            return (int)(buffer[3] | buffer[2] << 8 | buffer[1] << 16 | buffer[0] << 24);
+                return b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24);
+            return (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3];
         }
 
         public uint ReadUInt(Endian inEndian = Endian.Little)
         {
             FillBuffer(4);
+            var b = buffer;
             if (inEndian == Endian.Little)
-                return (uint)(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
-            return (uint)(buffer[3] | buffer[2] << 8 | buffer[1] << 16 | buffer[0] << 24);
+                return (uint)(b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24));
+            return (uint)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
         }
 
         public long ReadLong(Endian inEndian = Endian.Little)
         {
             FillBuffer(8);
+            var b = buffer;
             if (inEndian == Endian.Little)
-                return (long)(uint)(buffer[4] | buffer[5] << 8 | buffer[6] << 16 | buffer[7] << 24) << 32 |
-                       (long)(uint)(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
-            return (long)(uint)(buffer[3] | buffer[2] << 8 | buffer[1] << 16 | buffer[0] << 24) << 32 |
-                   (long)(uint)(buffer[7] | buffer[6] << 8 | buffer[5] << 16 | buffer[4] << 24);
+            {
+                uint lo = (uint)(b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24));
+                uint hi = (uint)(b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24));
+                return (long)(((ulong)hi << 32) | lo);
+            }
+            else
+            {
+                uint hi = (uint)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
+                uint lo = (uint)((b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7]);
+                return (long)(((ulong)hi << 32) | lo);
+            }
         }
 
         public ulong ReadULong(Endian inEndian = Endian.Little)
         {
             FillBuffer(8);
+            var b = buffer;
             if (inEndian == Endian.Little)
-                return (ulong)(uint)(buffer[4] | buffer[5] << 8 | buffer[6] << 16 | buffer[7] << 24) << 32 |
-                       (ulong)(uint)(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
-            return (ulong)(uint)(buffer[3] | buffer[2] << 8 | buffer[1] << 16 | buffer[0] << 24) << 32 |
-                   (ulong)(uint)(buffer[7] | buffer[6] << 8 | buffer[5] << 16 | buffer[4] << 24);
+            {
+                uint lo = (uint)(b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24));
+                uint hi = (uint)(b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24));
+                return ((ulong)hi << 32) | lo;
+            }
+            else
+            {
+                uint hi = (uint)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
+                uint lo = (uint)((b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7]);
+                return ((ulong)hi << 32) | lo;
+            }
         }
 
         public unsafe float ReadFloat(Endian inEndian = Endian.Little)
         {
             FillBuffer(4);
+            var b = buffer;
+            uint tmpBuffer = (inEndian == Endian.Little)
+                ? (uint)(b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24))
+                : (uint)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
 
-            uint tmpBuffer = 0;
-            if (inEndian == Endian.Little)
-                tmpBuffer = (uint)(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
-            else
-                tmpBuffer = (uint)(buffer[3] | buffer[2] << 8 | buffer[1] << 16 | buffer[0] << 24);
-
-            return *((float*)&tmpBuffer);
+            return *(float*)&tmpBuffer;
         }
 
         public unsafe double ReadDouble(Endian inEndian = Endian.Little)
         {
             FillBuffer(8);
-
-            uint lo = 0;
-            uint hi = 0;
+            var b = buffer;
+            ulong tmpBuffer;
 
             if (inEndian == Endian.Little)
             {
-                lo = (uint)(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
-                hi = (uint)(buffer[4] | buffer[5] << 8 | buffer[6] << 16 | buffer[7] << 24);
+                uint lo = (uint)(b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24));
+                uint hi = (uint)(b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24));
+                tmpBuffer = ((ulong)hi << 32) | lo;
             }
             else
             {
-                lo = (uint)(buffer[3] | buffer[2] << 8 | buffer[1] << 16 | buffer[0] << 24);
-                hi = (uint)(buffer[7] | buffer[6] << 8 | buffer[5] << 16 | buffer[4] << 24);
+                uint lo = (uint)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
+                uint hi = (uint)((b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7]);
+                tmpBuffer = ((ulong)hi << 32) | lo;
             }
 
-            ulong tmpBuffer = ((ulong)hi) << 32 | lo;
-            return *((double*)&tmpBuffer);
+            return *(double*)&tmpBuffer;
         }
 
         #endregion
@@ -180,16 +195,22 @@ namespace FrostySdk.IO
         public Guid ReadGuid(Endian endian = Endian.Little)
         {
             FillBuffer(16);
-            if (endian == Endian.Little)
-                return new Guid(new byte[] {
-                        buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7],
-                        buffer[8], buffer[9], buffer[10], buffer[11], buffer[12], buffer[13], buffer[14], buffer[15]
-                    });
+            var b = buffer;
 
-            return new Guid(new byte[] {
-                    buffer[3], buffer[2], buffer[1], buffer[0], buffer[5], buffer[4], buffer[7], buffer[6],
-                    buffer[8], buffer[9], buffer[10], buffer[11], buffer[12], buffer[13], buffer[14], buffer[15]
-                });
+            if (endian == Endian.Little)
+            {
+                int a = b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24);
+                short c = (short)(b[4] | (b[5] << 8));
+                short d = (short)(b[6] | (b[7] << 8));
+                return new Guid(a, c, d, b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
+            }
+            else
+            {
+                int a = b[3] | (b[2] << 8) | (b[1] << 16) | (b[0] << 24);
+                short c = (short)(b[5] | (b[4] << 8));
+                short d = (short)(b[7] | (b[6] << 8));
+                return new Guid(a, c, d, b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
+            }
         }
 
         public Sha1 ReadSha1()
@@ -208,7 +229,7 @@ namespace FrostySdk.IO
                 int b = ReadByte();
                 result |= (b & 127) << i;
 
-                if (b >> 7 == 0)
+                if ((b >> 7) == 0)
                     return result;
 
                 i += 7;
@@ -223,9 +244,9 @@ namespace FrostySdk.IO
             while (true)
             {
                 int b = ReadByte();
-                result |= (long)((b & 127) << i);
+                result |= (long)(b & 127) << i;
 
-                if (b >> 7 == 0)
+                if ((b >> 7) == 0)
                     return result;
 
                 i += 7;
@@ -234,7 +255,23 @@ namespace FrostySdk.IO
 
         #endregion
 
-        #region -- String Types --
+        #region String Types
+
+        private void EnsureStringBufferCapacity(ref char[] buf, int requiredCapacity, int currentCount)
+        {
+            if (buf.Length < requiredCapacity)
+            {
+                int newSize = buf.Length * 2;
+                if (newSize < requiredCapacity) newSize = requiredCapacity;
+
+                char[] newBuf = new char[newSize];
+                if (currentCount > 0)
+                {
+                    Array.Copy(buf, newBuf, currentCount);
+                }
+                _stringBuffer = buf = newBuf;
+            }
+        }
 
         public string ReadNullTerminatedString()
         {
@@ -251,9 +288,7 @@ namespace FrostySdk.IO
 
                 if (count == buf.Length)
                 {
-                    char[] newBuf = new char[buf.Length * 2];
-                    Array.Copy(buf, newBuf, buf.Length);
-                    _stringBuffer = buf = newBuf;
+                    EnsureStringBufferCapacity(ref buf, buf.Length * 2, count);
                 }
                 buf[count++] = (char)b;
             }
@@ -274,9 +309,7 @@ namespace FrostySdk.IO
 
                 if (count == buf.Length)
                 {
-                    char[] newBuf = new char[buf.Length * 2];
-                    Array.Copy(buf, newBuf, buf.Length);
-                    _stringBuffer = buf = newBuf;
+                    EnsureStringBufferCapacity(ref buf, buf.Length * 2, count);
                 }
                 buf[count++] = c;
             }
@@ -284,26 +317,35 @@ namespace FrostySdk.IO
 
         public string ReadSizedString(int strLen)
         {
-            char[] buf = _stringBuffer;
-            if (buf == null)
-                _stringBuffer = buf = new char[256];
+            if (strLen <= 0) return string.Empty;
+
+            char[] cBuf = _stringBuffer;
+            if (cBuf == null)
+                _stringBuffer = cBuf = new char[Math.Max(256, strLen)];
+            else if (cBuf.Length < strLen)
+                _stringBuffer = cBuf = new char[strLen];
+
             int count = 0;
 
-            for (int i = 0; i < strLen; i++)
+            // Reuses the instance level byte array to completely avoid allocating byte[] blocks on the heap
+            byte[] bBuf = _stringByteBuffer;
+            if (bBuf == null)
+                _stringByteBuffer = bBuf = new byte[Math.Max(256, strLen)];
+            else if (bBuf.Length < strLen)
+                _stringByteBuffer = bBuf = new byte[strLen];
+
+            int bytesRead = Read(bBuf, 0, strLen);
+
+            for (int i = 0; i < bytesRead; i++)
             {
-                char c = (char)ReadByte();
-                if (c != 0x00)
+                byte b = bBuf[i];
+                if (b != 0x00)
                 {
-                    if (count == buf.Length)
-                    {
-                        char[] newBuf = new char[buf.Length * 2];
-                        Array.Copy(buf, newBuf, buf.Length);
-                        _stringBuffer = buf = newBuf;
-                    }
-                    buf[count++] = c;
+                    cBuf[count++] = (char)b;
                 }
             }
-            return new string(buf, 0, count);
+
+            return new string(cBuf, 0, count);
         }
 
         public string ReadLine()
@@ -319,9 +361,7 @@ namespace FrostySdk.IO
                 c = ReadByte();
                 if (count == buf.Length)
                 {
-                    char[] newBuf = new char[buf.Length * 2];
-                    Array.Copy(buf, newBuf, buf.Length);
-                    _stringBuffer = buf = newBuf;
+                    EnsureStringBufferCapacity(ref buf, buf.Length * 2, count);
                 }
                 buf[count++] = (char)c;
                 if (c == 0x0a || c == 0x0d || Position >= Length)
@@ -347,9 +387,7 @@ namespace FrostySdk.IO
                 c = ReadWideChar();
                 if (count == buf.Length)
                 {
-                    char[] newBuf = new char[buf.Length * 2];
-                    Array.Copy(buf, newBuf, buf.Length);
-                    _stringBuffer = buf = newBuf;
+                    EnsureStringBufferCapacity(ref buf, buf.Length * 2, count);
                 }
                 buf[count++] = c;
                 if (c == 0x0a || c == 0x0d || Position >= Length)
@@ -364,14 +402,25 @@ namespace FrostySdk.IO
 
         public void Pad(int alignment)
         {
-            if (alignment == 0)
-            {
-                return;
-            }
+            if (alignment <= 0) return;
 
-            while (Position % alignment != 0)
+            if (deobfuscator == null)
             {
-                Position++;
+                // Fast path: O(1) mathematical jump when stream structure is direct
+                long currentPos = Position;
+                long rem = currentPos % alignment;
+                if (rem != 0)
+                {
+                    Position = currentPos + (alignment - rem);
+                }
+            }
+            else
+            {
+                // Strict compatibility fallback: Step by byte progression to keep the state of sequential deobfuscator stream ciphers synchronized.
+                while (Position % alignment != 0)
+                {
+                    Position++;
+                }
             }
         }
 
@@ -380,26 +429,23 @@ namespace FrostySdk.IO
         public byte[] ReadToEnd()
         {
             long totalSize = Length - Position;
-            if (totalSize < int.MaxValue)
-                return ReadBytes((int)totalSize);
+            if (totalSize <= 0)
+                return Array.Empty<byte>();
 
-            byte[] outBuffer = new byte[totalSize];
-            while (totalSize > 0)
+            // 0x7FEFFFFF (2,146,435,071 bytes) is the absolute maximum byte array size supported by the CLR.
+            // Rejecting sizes above this boundary prevents runtime allocation failures and silent offset wrapping issues yippe.
+            if (totalSize >= 0X7FEFFFFF)
             {
-                int bufferSize = (totalSize > int.MaxValue) ? int.MaxValue : (int)totalSize;
-                byte[] tmpBuffer = new byte[bufferSize];
-
-                int count = Read(tmpBuffer, 0, bufferSize);
-                totalSize -= bufferSize;
-
-                Buffer.BlockCopy(tmpBuffer, 0, outBuffer, count, bufferSize);
+                throw new NotSupportedException("Streams larger than 2GB are not supported by ReadToEnd.");
             }
 
-            return outBuffer;
+            return ReadBytes((int)totalSize);
         }
 
         public byte[] ReadBytes(int count)
         {
+            if (count <= 0) return Array.Empty<byte>();
+
             byte[] outBuffer = new byte[count];
             int totalNumBytesRead = 0;
 
@@ -435,9 +481,7 @@ namespace FrostySdk.IO
         protected virtual void FillBuffer(int numBytes)
         {
             stream.Read(buffer, 0, numBytes);
-            var deob = deobfuscator;
-            if (deob != null)
-                deob.Deobfuscate(buffer, Position, 0, numBytes);
+            deobfuscator?.Deobfuscate(buffer, Position, 0, numBytes);
         }
 
         protected virtual void Dispose(bool disposing)
@@ -452,6 +496,8 @@ namespace FrostySdk.IO
 
             stream = null;
             buffer = null;
+            _stringBuffer = null;
+            _stringByteBuffer = null;
         }
     }
 }

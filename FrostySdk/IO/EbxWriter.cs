@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq.Expressions;
 using System.Reflection;
 
 namespace FrostySdk.IO
@@ -125,7 +126,7 @@ namespace FrostySdk.IO
         public HashSet<Guid> Dependencies => dependencies;
 
         private HashSet<int> objsToProcessSet = new HashSet<int>();
-		private List<object> objsToProcess = new List<object>();
+        private List<object> objsToProcess = new List<object>();
         private List<Type> typesToProcess = new List<Type>();
         private List<EbxFieldMetaAttribute> arrayTypes = new List<EbxFieldMetaAttribute>();
 
@@ -136,16 +137,16 @@ namespace FrostySdk.IO
         private List<EbxClass> classTypes = new List<EbxClass>();
         private List<EbxField> fieldTypes = new List<EbxField>();
         private List<string> typeNames = new List<string>();
-        
+
         private HashSet<EbxImportReference> imports = new HashSet<EbxImportReference>();
         private Dictionary<EbxImportReference, int> importOrderFw = new Dictionary<EbxImportReference, int>();
         private Dictionary<int, EbxImportReference> importOrderBw = new Dictionary<int, EbxImportReference>();
-        
+
         private byte[] data = null;
         private List<EbxInstance> instances = new List<EbxInstance>();
         private List<EbxArray> arrays = new List<EbxArray>();
         private List<byte[]> arrayData = new List<byte[]>();
-        
+
         private ushort uniqueClassCount = 0;
         private ushort exportedCount = 0;
 
@@ -203,8 +204,8 @@ namespace FrostySdk.IO
             uint dataLen = 0;
 
             GenerateImportOrder();
-			
-			//objsToProcess.Reverse();
+
+            //objsToProcess.Reverse();
             foreach (object obj in objsToProcess)
                 ProcessClass(obj.GetType());
             for (int i = 0; i < typesToProcess.Count; i++)
@@ -326,7 +327,7 @@ namespace FrostySdk.IO
                 {
                     EbxArray array = arrays[i];
                     if (array.Count > 0)
-                    { 
+                    {
                         Write(array.Count);
 
                         array.Offset = (uint)(Position - offset);
@@ -397,7 +398,7 @@ namespace FrostySdk.IO
                     return new List<object>();
 
                 objsToProcessSet.Add(hashCode);
-				objsToProcess.Add(obj);
+                objsToProcess.Add(obj);
                 objs.Add(obj);
             }
 
@@ -644,8 +645,8 @@ namespace FrostySdk.IO
 
             AddField(pi.Name, fta.Flags, classRef, fta.Offset, 0);
         }
-		
-		private void GenerateImportOrder()
+
+        private void GenerateImportOrder()
         {
             int i = 0;
             foreach (EbxImportReference import in imports)
@@ -1025,19 +1026,25 @@ namespace FrostySdk.IO
         public HashSet<Guid> Dependencies => dependencies;
 
         private List<object> objsToProcess = new List<object>();
+        private HashSet<object> objsToProcessSet = new HashSet<object>();
         private List<Type> typesToProcess = new List<Type>();
+        private Dictionary<Type, int> typesToProcessIndex = new Dictionary<Type, int>();
         private List<EbxFieldMetaAttribute> arrayTypes = new List<EbxFieldMetaAttribute>();
 
         private List<object> objs = new List<object>();
         private List<object> sortedObjs = new List<object>();
+        private Dictionary<object, int> sortedObjsIndex = new Dictionary<object, int>();
         private HashSet<Guid> dependencies = new HashSet<Guid>();
 
         private List<EbxClass> classTypes = new List<EbxClass>();
         private List<Guid> classGuids = new List<Guid>();
         private List<EbxField> fieldTypes = new List<EbxField>();
         private List<string> typeNames = new List<string>();
+        private HashSet<string> typeNamesSet = new HashSet<string>();
         private List<EbxImportReference> imports = new List<EbxImportReference>();
+        private Dictionary<EbxImportReference, int> importsIndex = new Dictionary<EbxImportReference, int>();
         private new List<string> strings = new List<string>();
+        private Dictionary<string, uint> stringsIndex = new Dictionary<string, uint>();
         private byte[] data = null;
         private List<EbxInstance> instances = new List<EbxInstance>();
         private List<EbxArray> arrays = new List<EbxArray>();
@@ -1045,6 +1052,112 @@ namespace FrostySdk.IO
 
         private ushort uniqueClassCount = 0;
         private ushort exportedCount = 0;
+
+        // Cache of Hash to (PropertyInfo, EbxFieldMetaAttribute, IsReference) per Type, built once per Type
+        // instead of walking reflection attributes for every field of every object being written.
+        // Static + ConcurrentDictionary so the cache is reused across writer instances.
+        // Changes by Lala, the output and input should be the same but contact if something is off.
+        private sealed class CachedPropertyInfo
+        {
+            public PropertyInfo Property;
+            public EbxFieldMetaAttribute FieldMeta;
+            public bool IsReference;
+            public Func<object, object> Getter;
+        }
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Dictionary<uint, CachedPropertyInfo>> s_writeClassFieldCache
+            = new System.Collections.Concurrent.ConcurrentDictionary<Type, Dictionary<uint, CachedPropertyInfo>>();
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<PropertyInfo, Func<object, object>> s_getterCache
+            = new System.Collections.Concurrent.ConcurrentDictionary<PropertyInfo, Func<object, object>>();
+
+        private static Func<object, object> GetGetter(PropertyInfo pi)
+            => s_getterCache.GetOrAdd(pi, p =>
+            {
+                ParameterExpression objParam = Expression.Parameter(typeof(object), "obj");
+                UnaryExpression castObj = Expression.Convert(objParam, p.DeclaringType);
+                MemberExpression propExpr = Expression.Property(castObj, p);
+                UnaryExpression castResult = Expression.Convert(propExpr, typeof(object));
+                return Expression.Lambda<Func<object, object>>(castResult, objParam).Compile();
+            });
+
+        private static Dictionary<uint, CachedPropertyInfo> GetHashPropertyCache(Type objType, PropertyInfo[] pis)
+        {
+            if (s_writeClassFieldCache.TryGetValue(objType, out Dictionary<uint, CachedPropertyInfo> cached))
+                return cached;
+
+            Dictionary<uint, CachedPropertyInfo> map = new Dictionary<uint, CachedPropertyInfo>();
+            foreach (PropertyInfo curPi in pis)
+            {
+                HashAttribute hashAttr = curPi.GetCustomAttribute<HashAttribute>();
+                if (hashAttr == null)
+                    continue;
+
+                uint hashValue = (uint)hashAttr.Hash;
+
+                if (map.ContainsKey(hashValue))
+                    continue;
+
+                map[hashValue] = new CachedPropertyInfo
+                {
+                    Property = curPi,
+                    FieldMeta = GetFieldMeta(curPi),
+                    IsReference = curPi.GetCustomAttribute<IsReferenceAttribute>() != null,
+                    Getter = GetGetter(curPi)
+                };
+            }
+
+            s_writeClassFieldCache[objType] = map;
+            return map;
+        }
+
+        // Cache of Type to EbxClass so GetClass(Type)
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, EbxClass> s_getClassCache
+            = new System.Collections.Concurrent.ConcurrentDictionary<Type, EbxClass>();
+
+        // Cache of Type to declared public instance properties
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, PropertyInfo[]> s_typePropertiesCache
+            = new System.Collections.Concurrent.ConcurrentDictionary<Type, PropertyInfo[]>();
+
+        private static PropertyInfo[] GetCachedProperties(Type type)
+            => s_typePropertiesCache.GetOrAdd(type, t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly));
+
+        // Cache of PropertyInfo to IsTransientAttribute presence
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<PropertyInfo, bool> s_isTransientCache
+            = new System.Collections.Concurrent.ConcurrentDictionary<PropertyInfo, bool>();
+
+        private static bool IsTransient(PropertyInfo pi)
+            => s_isTransientCache.GetOrAdd(pi, p => p.GetCustomAttribute<IsTransientAttribute>() != null);
+
+        // Cache of PropertyInfo to EbxFieldMetaAttribute
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<PropertyInfo, EbxFieldMetaAttribute> s_fieldMetaCache
+            = new System.Collections.Concurrent.ConcurrentDictionary<PropertyInfo, EbxFieldMetaAttribute>();
+
+        private static EbxFieldMetaAttribute GetFieldMeta(PropertyInfo pi)
+            => s_fieldMetaCache.GetOrAdd(pi, p => p.GetCustomAttribute<EbxFieldMetaAttribute>());
+
+        // Cache of Type to compiled delegate for GetInstanceGuid
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<object, AssetClassGuid>> s_getInstanceGuidCache
+            = new System.Collections.Concurrent.ConcurrentDictionary<Type, Func<object, AssetClassGuid>>();
+
+        private static Func<object, AssetClassGuid> GetInstanceGuidDelegate(Type type)
+        {
+            return s_getInstanceGuidCache.GetOrAdd(type, t =>
+            {
+                MethodInfo mi = t.GetMethod("GetInstanceGuid", BindingFlags.Public | BindingFlags.Instance);
+                ParameterExpression objParam = Expression.Parameter(typeof(object), "obj");
+                UnaryExpression castObj = Expression.Convert(objParam, mi.DeclaringType);
+                MethodCallExpression call = Expression.Call(castObj, mi);
+                return Expression.Lambda<Func<object, AssetClassGuid>>(call, objParam).Compile();
+            });
+        }
+
+        private static AssetClassGuid GetInstanceGuid(object obj)
+            => GetInstanceGuidDelegate(obj.GetType())(obj);
 
         internal EbxWriterV2(Stream inStream, EbxWriteFlags inFlags = EbxWriteFlags.None, bool leaveOpen = false)
             : base(inStream, inFlags, leaveOpen)
@@ -1208,7 +1321,7 @@ namespace FrostySdk.IO
                         array.Offset = (uint)(Position - offset);
 
                         long lastPos = Position;
-                        
+
                         Position = arraysOffset + i * 12;
                         Write(array.Offset);
                         Position = lastPos;
@@ -1283,42 +1396,47 @@ namespace FrostySdk.IO
         {
             if (add)
             {
-                if (objsToProcess.Contains(obj))
+                if (objsToProcessSet.Contains(obj))
                     return new List<object>();
 
                 objsToProcess.Add(obj);
+                objsToProcessSet.Add(obj);
                 objs.Add(obj);
             }
 
-            PropertyInfo[] pis = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
+            PropertyInfo[] pis = GetCachedProperties(type);
             List<object> retObjects = new List<object>();
 
             foreach (PropertyInfo pi in pis)
             {
-                if (pi.GetCustomAttribute<IsTransientAttribute>() != null && !m_flags.HasFlag(EbxWriteFlags.IncludeTransient))
+                if (IsTransient(pi) && !m_flags.HasFlag(EbxWriteFlags.IncludeTransient))
                     continue;
 
                 if (pi.PropertyType == typeof(PointerRef))
                 {
-                    PointerRef value = (PointerRef)pi.GetValue(obj);
+                    PointerRef value = (PointerRef)GetGetter(pi)(obj);
                     if (value.Type == PointerRefType.Internal)
                         retObjects.Add(value.Internal);
                     //ExtractClass(value.Internal.GetType(), value.Internal);
                     else if (value.Type == PointerRefType.External)
                     {
-                        if (!imports.Contains(value.External))
+                        if (!importsIndex.ContainsKey(value.External))
+                        {
+                            importsIndex[value.External] = imports.Count;
                             imports.Add(value.External);
+                        }
                     }
                 }
                 else if (pi.PropertyType.Namespace == "FrostySdk.Ebx" && pi.PropertyType.BaseType != typeof(Enum))
                 {
-                    object structObj = pi.GetValue(obj);
+                    object structObj = GetGetter(pi)(obj);
                     retObjects.AddRange(ExtractClass(structObj.GetType(), structObj, false));
                 }
                 else if (pi.PropertyType.Name == "List`1")
                 {
                     Type arrayType = pi.PropertyType;
-                    int count = (int)arrayType.GetMethod("get_Count").Invoke(pi.GetValue(obj), null);
+                    object listObj = GetGetter(pi)(obj);
+                    int count = (int)arrayType.GetMethod("get_Count").Invoke(listObj, null);
 
                     if (count > 0)
                     {
@@ -1326,14 +1444,17 @@ namespace FrostySdk.IO
                         {
                             for (int i = 0; i < count; i++)
                             {
-                                PointerRef value = (PointerRef)arrayType.GetMethod("get_Item").Invoke(pi.GetValue(obj), new object[] { i });
+                                PointerRef value = (PointerRef)arrayType.GetMethod("get_Item").Invoke(listObj, new object[] { i });
                                 if (value.Type == PointerRefType.Internal)
                                     retObjects.Add(value.Internal);
                                 //ExtractClass(value.Internal.GetType(), value.Internal);
                                 else if (value.Type == PointerRefType.External)
                                 {
-                                    if (!imports.Contains(value.External))
+                                    if (!importsIndex.ContainsKey(value.External))
+                                    {
+                                        importsIndex[value.External] = imports.Count;
                                         imports.Add(value.External);
+                                    }
                                 }
                             }
                         }
@@ -1341,7 +1462,7 @@ namespace FrostySdk.IO
                         {
                             for (int i = 0; i < count; i++)
                             {
-                                object value = arrayType.GetMethod("get_Item").Invoke(pi.GetValue(obj), new object[] { i });
+                                object value = arrayType.GetMethod("get_Item").Invoke(listObj, new object[] { i });
                                 retObjects.AddRange(ExtractClass(value.GetType(), value, false));
                             }
                         }
@@ -1369,12 +1490,12 @@ namespace FrostySdk.IO
                 return (ushort)index;
 
             EbxClassMetaAttribute cta = objType.GetCustomAttribute<EbxClassMetaAttribute>();
-            PropertyInfo[] allProps = objType.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            PropertyInfo[] allProps = GetCachedProperties(objType);
             List<PropertyInfo> pis = new List<PropertyInfo>();
 
             foreach (PropertyInfo pi in allProps)
             {
-                if (pi.GetCustomAttribute<IsTransientAttribute>() != null && !m_flags.HasFlag(EbxWriteFlags.IncludeTransient))
+                if (IsTransient(pi) && !m_flags.HasFlag(EbxWriteFlags.IncludeTransient))
                     continue;
                 pis.Add(pi);
             }
@@ -1402,7 +1523,7 @@ namespace FrostySdk.IO
                 // Fields
                 foreach (PropertyInfo pi in pis)
                 {
-                    EbxFieldMetaAttribute fta = pi.GetCustomAttribute<EbxFieldMetaAttribute>();
+                    EbxFieldMetaAttribute fta = GetFieldMeta(pi);
                     EbxFieldType ebxType = (EbxFieldType)((fta.Flags >> 4) & 0x1F);
 
                     if (ebxType == EbxFieldType.Struct)
@@ -1423,7 +1544,7 @@ namespace FrostySdk.IO
                         if (FindExistingClass(arrayType) == -1)
                         {
 
-                            if (!typesToProcess.Contains(arrayType))
+                            if (!typesToProcessIndex.ContainsKey(arrayType))
                             {
                                 arrayTypes.Add(fta);
                                 //AddClass("array", 0, 1, 4, fta.Flags, 4, 0, arrayType);
@@ -1487,13 +1608,13 @@ namespace FrostySdk.IO
             }
             else
             {
-                PropertyInfo[] allProps = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                PropertyInfo[] allProps = GetCachedProperties(type);
                 List<PropertyInfo> pis = new List<PropertyInfo>();
 
                 foreach (PropertyInfo pi in allProps)
                 {
                     // ignore transients if saving to project
-                    if (pi.GetCustomAttribute<IsTransientAttribute>() != null && !m_flags.HasFlag(EbxWriteFlags.IncludeTransient))
+                    if (IsTransient(pi) && !m_flags.HasFlag(EbxWriteFlags.IncludeTransient))
                         continue;
 
                     // ignore instance guid
@@ -1534,11 +1655,11 @@ namespace FrostySdk.IO
         {
             ushort classRef = 0;
 
-            EbxFieldMetaAttribute fta = pi.GetCustomAttribute<EbxFieldMetaAttribute>();
+            EbxFieldMetaAttribute fta = GetFieldMeta(pi);
             EbxFieldType ebxType = (EbxFieldType)((fta.Flags >> 4) & 0x1F);
 
             Type propType = pi.PropertyType;
-            classRef = (ushort)typesToProcess.FindIndex((Type value) => value == propType);
+            classRef = (ushort)FindExistingClass(propType);
             if (classRef == 0xFFFF)
                 classRef = 0;
 
@@ -1553,8 +1674,8 @@ namespace FrostySdk.IO
 
             for (int i = 0; i < objs.Count; i++)
             {
-                dynamic obj = objs[i];
-                AssetClassGuid guid = obj.GetInstanceGuid();
+                object obj = objs[i];
+                AssetClassGuid guid = GetInstanceGuid(obj);
                 if (guid.IsExported)
                     exportedObjs.Add(obj);
                 else
@@ -1564,10 +1685,10 @@ namespace FrostySdk.IO
             object root = exportedObjs[0];
             exportedObjs.RemoveAt(0);
 
-            exportedObjs.Sort((dynamic a, dynamic b) =>
+            exportedObjs.Sort((object a, object b) =>
             {
-                AssetClassGuid guidA = a.GetInstanceGuid();
-                AssetClassGuid guidB = b.GetInstanceGuid();
+                AssetClassGuid guidA = GetInstanceGuid(a);
+                AssetClassGuid guidB = GetInstanceGuid(b);
 
                 byte[] bA = guidA.ExportedGuid.ToByteArray();
                 byte[] bB = guidB.ExportedGuid.ToByteArray();
@@ -1583,6 +1704,9 @@ namespace FrostySdk.IO
             sortedObjs.Add(root);
             sortedObjs.AddRange(exportedObjs);
             sortedObjs.AddRange(otherObjs);
+
+            for (int i = 0; i < sortedObjs.Count; i++)
+                sortedObjsIndex[sortedObjs[i]] = i;
 
             MemoryStream dataStream = new MemoryStream();
             using (NativeWriter writer = new NativeWriter(dataStream))
@@ -1603,7 +1727,7 @@ namespace FrostySdk.IO
 
                 for (int i = 0; i < sortedObjs.Count; i++)
                 {
-                    AssetClassGuid guid = ((dynamic)sortedObjs[i]).GetInstanceGuid();
+                    AssetClassGuid guid = GetInstanceGuid(sortedObjs[i]);
 
                     type = sortedObjs[i].GetType();
                     classIdx = FindExistingClass(type);
@@ -1661,8 +1785,9 @@ namespace FrostySdk.IO
             if (objType.BaseType.Namespace == "FrostySdk.Ebx")
                 WriteClass(obj, objType.BaseType, writer);
 
-            PropertyInfo[] pis = objType.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            PropertyInfo[] pis = GetCachedProperties(objType);
             EbxClass classType = classTypes[FindExistingClass(objType)];
+            Dictionary<uint, CachedPropertyInfo> hashToProperty = GetHashPropertyCache(objType, pis);
 
             for (int i = 0; i < classType.FieldCount; i++)
             {
@@ -1670,19 +1795,8 @@ namespace FrostySdk.IO
                 if (field.DebugType == EbxFieldType.Inherited)
                     continue;
 
-                PropertyInfo pi = null;
-                foreach (PropertyInfo curPi in pis)
-                {
-                    var attr = curPi.GetCustomAttribute<HashAttribute>();
-                    if (attr != null)
-                    {
-                        if ((uint)attr.Hash == field.NameHash)
-                        {
-                            pi = curPi;
-                            break;
-                        }
-                    }
-                }
+                hashToProperty.TryGetValue(field.NameHash, out CachedPropertyInfo cachedPi);
+                PropertyInfo pi = cachedPi?.Property;
 
                 if (pi == null)
                 {
@@ -1737,11 +1851,11 @@ namespace FrostySdk.IO
                     continue;
                 }
 
-                EbxFieldMetaAttribute fta = pi.GetCustomAttribute<EbxFieldMetaAttribute>();
-                bool isReference = pi.GetCustomAttribute<IsReferenceAttribute>() != null;
+                EbxFieldMetaAttribute fta = cachedPi.FieldMeta;
+                bool isReference = cachedPi.IsReference;
 
                 EbxFieldType ebxType = (EbxFieldType)((fta.Flags >> 4) & 0x1F);
-                WriteField(pi.GetValue(obj), ebxType, classType.Alignment, writer, isReference);
+                WriteField(cachedPi.Getter(obj), ebxType, classType.Alignment, writer, isReference);
             }
 
             //foreach (PropertyInfo pi in pis)
@@ -1792,14 +1906,14 @@ namespace FrostySdk.IO
 
                         if (pointer.Type == PointerRefType.External)
                         {
-                            int importIdx = imports.FindIndex((EbxImportReference value) => value == pointer.External);
+                            int importIdx = importsIndex.TryGetValue(pointer.External, out int foundImportIdx) ? foundImportIdx : -1;
                             pointerIndex = (uint)(importIdx | 0x80000000);
 
                             if (isReference && !dependencies.Contains(imports[importIdx].FileGuid))
                                 dependencies.Add(imports[importIdx].FileGuid);
                         }
                         else if (pointer.Type == PointerRefType.Internal)
-                            pointerIndex = (uint)(sortedObjs.FindIndex((object value) => value == pointer.Internal) + 1);
+                            pointerIndex = (uint)((sortedObjsIndex.TryGetValue(pointer.Internal, out int internalIdx) ? internalIdx : -1) + 1);
 
                         writer.Write(pointerIndex);
                     }
@@ -1920,11 +2034,11 @@ namespace FrostySdk.IO
             }
         }
 
-        private int FindExistingClass(Type inType) => typesToProcess.FindIndex((Type value) => value == inType);
+        private int FindExistingClass(Type inType) => typesToProcessIndex.TryGetValue(inType, out int idx) ? idx : -1;
 
         private void AddTypeName(string inName)
         {
-            if (!typeNames.Contains(inName))
+            if (typeNamesSet.Add(inName))
                 typeNames.Add(inName);
         }
 
@@ -1933,6 +2047,7 @@ namespace FrostySdk.IO
             EbxClass ebxClass = GetClass(pi.GetCustomAttribute<GuidAttribute>().Guid);
             classTypes.Add(ebxClass);
             typesToProcess.Add(classType);
+            typesToProcessIndex[classType] = typesToProcess.Count - 1;
             classGuids.Add(pi.GetCustomAttribute<GuidAttribute>().Guid);
             return (classTypes.Count - 1);
         }
@@ -1953,6 +2068,7 @@ namespace FrostySdk.IO
 
             AddTypeName(name);
             typesToProcess.Add(classType);
+            typesToProcessIndex[classType] = typesToProcess.Count - 1;
 
             return (classTypes.Count - 1);
         }
@@ -1987,34 +2103,32 @@ namespace FrostySdk.IO
             if (stringToAdd == "")
                 return 0xFFFFFFFF;
 
-            uint offset = 0;
-            if (strings.Contains(stringToAdd))
-            {
-                for (int i = 0; i < strings.Count; i++)
-                {
-                    if (strings[i] == stringToAdd)
-                        break;
-                    offset += (uint)(strings[i].Length + 1);
-                }
-            }
-            else
-            {
-                offset = m_stringsLength;
-                strings.Add(stringToAdd);
-                m_stringsLength += (uint)(stringToAdd.Length + 1);
-            }
+            if (stringsIndex.TryGetValue(stringToAdd, out uint existingOffset))
+                return existingOffset;
+
+            uint offset = m_stringsLength;
+            strings.Add(stringToAdd);
+            stringsIndex[stringToAdd] = offset;
+            m_stringsLength += (uint)(stringToAdd.Length + 1);
 
             return offset;
         }
 
         internal EbxClass GetClass(Type objType)
         {
+            if (s_getClassCache.TryGetValue(objType, out EbxClass cachedResult))
+                return cachedResult;
+
             EbxClass? classType = null;
             foreach (TypeInfoGuidAttribute attr in objType.GetCustomAttributes<TypeInfoGuidAttribute>())
             {
                 classType = EbxReaderV2.patchStd.GetClass(attr.Guid);
 
-                if (classType.HasValue) return classType.Value;
+                if (classType.HasValue)
+                {
+                    s_getClassCache[objType] = classType.Value;
+                    return classType.Value;
+                }
             }
 
             foreach (TypeInfoGuidAttribute attr in objType.GetCustomAttributes<TypeInfoGuidAttribute>())
@@ -2023,6 +2137,7 @@ namespace FrostySdk.IO
 
                 if (classType.HasValue) break;
             }
+            s_getClassCache[objType] = classType.Value;
             return classType.Value;
         }
 
