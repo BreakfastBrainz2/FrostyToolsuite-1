@@ -532,20 +532,61 @@ namespace DuplicationPlugin
 
         public override EbxAssetEntry DuplicateAsset(EbxAssetEntry entry, string newName, bool createNew, Type newType)
         {
-            // BlueprintBundles always have lower case names
-            newName = newName.ToLower();
+            // Duplicate the ebx
+            EbxAssetEntry newEntry = base.DuplicateAsset(entry, newName, createNew, newType);
 
+            if (ProfilesLibrary.IsLoaded(ProfileVersion.PlantsVsZombiesBattleforNeighborville))
+            {
+                BundleEntry newBundle = App.AssetManager.AddBundle("Win32/" + newName.ToLower(), BundleType.BlueprintBundle, 0);
+
+                newEntry.AddedBundles.Clear();
+                newEntry.AddedBundles.Add(App.AssetManager.GetBundleId(newBundle));
+
+                newBundle.Blueprint = newEntry;
+            }
+            else
+            {
+                BundleEntry newBundle = App.AssetManager.AddBundle("win32/" + newName.ToLower(), BundleType.BlueprintBundle, 0);
+
+                newEntry.AddedBundles.Clear();
+                newEntry.AddedBundles.Add(App.AssetManager.GetBundleId(newBundle));
+
+                newBundle.Blueprint = newEntry;
+            }
+            return newEntry;
+        }
+    }
+
+    public class SubWorldDataExtension : DuplicateAssetExtension
+    {
+        public override string AssetType => "SubWorldData";
+
+        public override EbxAssetEntry DuplicateAsset(EbxAssetEntry entry, string newName, bool createNew, Type newType)
+        {
             // Duplicate the ebx
             EbxAssetEntry newEntry = base.DuplicateAsset(entry, newName, createNew, newType);
 
             // Add new bundle
-            BundleEntry newBundle = App.AssetManager.AddBundle("win32/" + newName, BundleType.BlueprintBundle, 0);
+            if (ProfilesLibrary.IsLoaded(ProfileVersion.PlantsVsZombiesBattleforNeighborville))
+            {
+                BundleEntry newBundle = App.AssetManager.AddBundle("Win32/" + newName.ToLower(), BundleType.SubLevel, 1);
 
-            newEntry.AddedBundles.Clear();
-            newEntry.AddedBundles.Add(App.AssetManager.GetBundleId(newBundle));
+                newEntry.AddedBundles.Clear();
+                newEntry.AddedBundles.Add(App.AssetManager.GetBundleId(newBundle));
 
-            newBundle.Blueprint = newEntry;
+                newBundle.Blueprint = newEntry;
+            }
+            else
+            {
+                App.Logger.Log("Selected game not supported");
 
+                /*BundleEntry newBundle = App.AssetManager.AddBundle("win32/" + newName.ToLower(), BundleType.SubLevel, 0);
+
+                newEntry.AddedBundles.Clear();
+                newEntry.AddedBundles.Add(App.AssetManager.GetBundleId(newBundle));
+
+                newBundle.Blueprint = newEntry;*/
+            }
             return newEntry;
         }
     }
