@@ -161,7 +161,9 @@
     <Content Include="Profiles\PVZ2SDK.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="Profiles\PVZ3SDK.dll" />
+    <Content Include="Profiles\PVZ3SDK.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FrostyHash\FrostyHash.vcxproj">
