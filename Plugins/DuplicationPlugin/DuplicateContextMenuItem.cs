@@ -557,6 +557,37 @@ namespace DuplicationPlugin
         }
     }
 
+    public class PVZCharacterWeaponBlueprintBundleExtension : DuplicateAssetExtension
+    {
+        public override string AssetType => "PVZCharacterWeaponBlueprintBundle";
+
+        public override EbxAssetEntry DuplicateAsset(EbxAssetEntry entry, string newName, bool createNew, Type newType)
+        {
+            // Duplicate the ebx
+            EbxAssetEntry newEntry = base.DuplicateAsset(entry, newName, createNew, newType);
+
+            if (ProfilesLibrary.IsLoaded(ProfileVersion.PlantsVsZombiesBattleforNeighborville))
+            {
+                BundleEntry newBundle = App.AssetManager.AddBundle("Win32/" + newName.ToLower(), BundleType.BlueprintBundle, 1);
+
+                newEntry.AddedBundles.Clear();
+                newEntry.AddedBundles.Add(App.AssetManager.GetBundleId(newBundle));
+
+                newBundle.Blueprint = newEntry;
+            }
+            else
+            {
+                BundleEntry newBundle = App.AssetManager.AddBundle("win32/" + newName.ToLower(), BundleType.BlueprintBundle, 1);
+
+                newEntry.AddedBundles.Clear();
+                newEntry.AddedBundles.Add(App.AssetManager.GetBundleId(newBundle));
+
+                newBundle.Blueprint = newEntry;
+            }
+            return newEntry;
+        }
+    }
+
     public class SubWorldDataExtension : DuplicateAssetExtension
     {
         public override string AssetType => "SubWorldData";
