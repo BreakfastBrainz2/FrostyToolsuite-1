@@ -5,7 +5,8 @@ using FrostySdk.Ebx;
 using FrostySdk.Interfaces;
 using FrostySdk.IO;
 using FrostySdk.Managers;
-using GW2BundleManagerPlugin.Ports.Classes;
+using FrostySdk.Managers.Entries;
+using PvZBundleManagerPlugin.Ports.Classes;
 using Microsoft.CSharp.RuntimeBinder;
 using System;
 using System.Collections.Concurrent;
@@ -17,7 +18,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GW2BundleManagerPlugin
+namespace PvZBundleManagerPlugin
 {
     internal class BundleManager : ILoggable
     {
@@ -25,13 +26,15 @@ namespace GW2BundleManagerPlugin
 
         private const uint CacheVersion = 2u;
 
-        private const string NetworkRegistryTypesPath = "Caches/" + "networkregistrytypes.txt";
+        private string NetworkRegistryTypesPath = "Caches/" + "networkregistrytypes.txt";
+
+        private bool IsBfn;
 
         internal ILogger m_logger;
 
         internal AssetManager m_assetManager;
 
-        internal FileSystem m_fs;
+        internal FileSystemManager m_fs;
 
         internal static Dictionary<string, BaseAssetHandler> s_handlers;
 
@@ -82,7 +85,7 @@ namespace GW2BundleManagerPlugin
             m_logger?.Log(text, vars);
         }
 
-        public BundleManager(AssetManager inAm, FileSystem inFs)
+        public BundleManager(AssetManager inAm, FileSystemManager inFs)
         {
             m_assetManager = inAm;
             m_fs = inFs;
@@ -90,13 +93,21 @@ namespace GW2BundleManagerPlugin
 
         public void Initialize()
         {
-            if (!ProfilesLibrary.IsLoaded(ProfileVersion.PlantsVsZombiesGardenWarfare2, ProfileVersion.PlantsVsZombiesGardenWarfare))
+            if (!ProfilesLibrary.IsLoaded(ProfileVersion.PlantsVsZombiesGardenWarfare2, ProfileVersion.PlantsVsZombiesGardenWarfare, ProfileVersion.PlantsVsZombiesBattleforNeighborville))
             {
                 return;
             }
 
+             IsBfn = ProfilesLibrary.DataVersion == (int)ProfileVersion.PlantsVsZombiesBattleforNeighborville;
+
+            if (IsBfn)
+            {
+                NetworkRegistryTypesPath = "Caches/networkregistrytypes_bfn.txt";
+            }
+
             if (!ReadFromCache())
             {
+
                 try { File.Delete(m_fs.CacheName + ".bundlecache"); } catch { }
                 if (File.Exists(NetworkRegistryTypesPath))
                 {
@@ -116,7 +127,7 @@ namespace GW2BundleManagerPlugin
 
         public void BundleManageAsset(EbxAssetEntry entry)
         {
-            if (!ProfilesLibrary.IsLoaded(ProfileVersion.PlantsVsZombiesGardenWarfare, ProfileVersion.PlantsVsZombiesGardenWarfare2))
+            if (!ProfilesLibrary.IsLoaded(ProfileVersion.PlantsVsZombiesGardenWarfare, ProfileVersion.PlantsVsZombiesGardenWarfare2, ProfileVersion.PlantsVsZombiesBattleforNeighborville))
             {
                 FrostyMessageBox.Show($"The bundle manager currently doesn't support {ProfilesLibrary.DisplayName}", "Frosty Editor", System.Windows.MessageBoxButton.OK);
             }
@@ -153,6 +164,122 @@ namespace GW2BundleManagerPlugin
             foreach (int bundleId in bundleIds)
             {
                 CheckIfRegistered(entry, bundleId);
+            }
+
+            // Automatically add BuffData to the AllBuffs AssetGatherer
+            if (entry.Type == "BuffData" || TypeLibrary.IsSubClassOf(entry.Type, "BuffData"))
+            {
+                AddBuffToAllBuffs(entry);
+            }
+
+            // Automatically add PerkAsset to the AllPerks AssetGatherer
+            if (entry.Type == "PerkAsset" || TypeLibrary.IsSubClassOf(entry.Type, "PerkAsset"))
+            {
+                AddPerkToAllPerks(entry);
+            }
+        }
+
+        private void AddPerkToAllPerks(EbxAssetEntry entry)
+        {
+            EbxAssetEntry allPerksEntry = m_assetManager.GetEbxEntry("Gameplay/Perks/Bundling/AllPerks");
+            if (allPerksEntry == null)
+            {
+                return;
+            }
+
+            EbxAsset allPerksAsset = m_assetManager.GetEbx(allPerksEntry);
+            dynamic root = allPerksAsset.RootObject;
+
+            try
+            {
+                var assetsList = root.Assets;
+                if (assetsList != null)
+                {
+                    EbxAsset perkAsset = m_assetManager.GetEbx(entry);
+                    dynamic perkRoot = perkAsset.RootObject;
+                    AssetClassGuid objGuid = perkRoot.GetInstanceGuid();
+
+                    PointerRef pr = new PointerRef(new EbxImportReference()
+                    {
+                        FileGuid = entry.Guid,
+                        ClassGuid = objGuid.ExportedGuid
+                    });
+
+                    bool alreadyContains = false;
+                    foreach (dynamic existingPr in assetsList)
+                    {
+                        if (existingPr.External.FileGuid == pr.External.FileGuid &&
+                            existingPr.External.ClassGuid == pr.External.ClassGuid)
+                        {
+                            alreadyContains = true;
+                            break;
+                        }
+                    }
+
+                    if (!alreadyContains)
+                    {
+                        assetsList.Add(pr);
+                        allPerksAsset.AddDependency(entry.Guid);
+                        m_assetManager.ModifyEbx(allPerksEntry.Name, allPerksAsset);
+                        WriteToLog("Added perk {0} to Gameplay/Perks/Bundling/AllPerks.", entry.Name);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteToLog("Failed to add perk to AllPerks: {0}", ex.Message);
+            }
+        }
+
+        private void AddBuffToAllBuffs(EbxAssetEntry entry)
+        {
+            EbxAssetEntry allBuffsEntry = m_assetManager.GetEbxEntry("Gameplay/Weapons/Bundling/AllBuffs");
+            if (allBuffsEntry == null)
+            {
+                return;
+            }
+
+            EbxAsset allBuffsAsset = m_assetManager.GetEbx(allBuffsEntry);
+            dynamic root = allBuffsAsset.RootObject;
+
+            try
+            {
+                var assetsList = root.Assets;
+                if (assetsList != null)
+                {
+                    EbxAsset buffAsset = m_assetManager.GetEbx(entry);
+                    dynamic buffRoot = buffAsset.RootObject;
+                    AssetClassGuid objGuid = buffRoot.GetInstanceGuid();
+
+                    PointerRef pr = new PointerRef(new EbxImportReference()
+                    {
+                        FileGuid = entry.Guid,
+                        ClassGuid = objGuid.ExportedGuid
+                    });
+
+                    bool alreadyContains = false;
+                    foreach (dynamic existingPr in assetsList)
+                    {
+                        if (existingPr.External.FileGuid == pr.External.FileGuid &&
+                            existingPr.External.ClassGuid == pr.External.ClassGuid)
+                        {
+                            alreadyContains = true;
+                            break;
+                        }
+                    }
+
+                    if (!alreadyContains)
+                    {
+                        assetsList.Add(pr);
+                        allBuffsAsset.AddDependency(entry.Guid);
+                        m_assetManager.ModifyEbx(allBuffsEntry.Name, allBuffsAsset);
+                        WriteToLog("Added buff {0} to Gameplay/Weapons/Bundling/AllBuffs.", entry.Name);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteToLog("Failed to add buff to AllBuffs: {0}", ex.Message);
             }
         }
 
@@ -575,16 +702,19 @@ namespace GW2BundleManagerPlugin
                         if (dbEntry.Mesh.External.FileGuid == entry.Guid && dbEntry.VariationAssetNameHash == 0)
                         {
                             foundMeshDBEntry = true;
-                            foreach (dynamic Material in dbEntry.Materials)
+                            if (!IsBfn)
                             {
-                                foreach (dynamic texParam in Material.TextureParameters)
+                                foreach (dynamic Material in dbEntry.Materials)
                                 {
-                                    EbxAssetEntry texEntry = m_assetManager.GetEbxEntry(texParam.Value.External.FileGuid);
-                                    if (texEntry != null)
+                                    foreach (dynamic texParam in Material.TextureParameters)
                                     {
-                                        if (!meshVariReferences.Contains(texEntry))
+                                        EbxAssetEntry texEntry = m_assetManager.GetEbxEntry(texParam.Value.External.FileGuid);
+                                        if (texEntry != null)
                                         {
-                                            meshVariReferences.Add(texEntry);
+                                            if (!meshVariReferences.Contains(texEntry))
+                                            {
+                                                meshVariReferences.Add(texEntry);
+                                            }
                                         }
                                     }
                                 }
@@ -619,20 +749,26 @@ namespace GW2BundleManagerPlugin
                         if (dbEntry.VariationAssetNameHash == nameHash)
                         {
                             foundMeshDBEntry = true;
-                            foreach (dynamic Material in dbEntry.Materials)
+
+                            if (!IsBfn)
                             {
-                                foreach (dynamic texParam in Material.TextureParameters)
+                                foreach (dynamic Material in dbEntry.Materials)
                                 {
-                                    EbxAssetEntry texEntry = m_assetManager.GetEbxEntry(texParam.Value.External.FileGuid);
-                                    if (texEntry != null)
+
+                                    foreach (dynamic texParam in Material.TextureParameters)
                                     {
-                                        if (!meshVariReferences.Contains(texEntry))
+                                        EbxAssetEntry texEntry = m_assetManager.GetEbxEntry(texParam.Value.External.FileGuid);
+                                        if (texEntry != null)
                                         {
-                                            meshVariReferences.Add(texEntry);
+                                            if (!meshVariReferences.Contains(texEntry))
+                                            {
+                                                meshVariReferences.Add(texEntry);
+                                            }
                                         }
                                     }
                                 }
                             }
+
                             meshDbEntry = dbEntry;
                             break;
                         }
@@ -812,18 +948,32 @@ namespace GW2BundleManagerPlugin
 
         private void CacheStaticBundles()
         {
-            int settingsBundleId = m_assetManager.GetBundleId("win32/default_settings_win32");
+            int settingsBundleId = m_assetManager.GetBundleId(IsBfn ? "Win32/default_settings" : "win32/default_settings_win32");        
             m_staticBundleIds.Add(settingsBundleId);
             m_bundleAndParents.Add(settingsBundleId, (new List<int>(), new List<int>()));
-            int startupBundleId = m_assetManager.GetBundleId("win32/systems/frostbitestartupdata");
+            int startupBundleId = m_assetManager.GetBundleId((IsBfn ? "Win32" : "win32") + "/systems/frostbitestartupdata");
             m_staticBundleIds.Add(startupBundleId);
             m_bundleAndParents.Add(startupBundleId, (new List<int>(), new List<int>() { settingsBundleId }));
-            int configBundleId = m_assetManager.GetBundleId("win32/gameplay/gameconfigurations/pvz_game");
+            int configBundleId = m_assetManager.GetBundleId((IsBfn ? "Win32" : "win32") + "/gameplay/gameconfigurations/pvz_game");
             m_staticBundleIds.Add(configBundleId);
             m_bundleAndParents.Add(configBundleId, (new List<int>(), new List<int>() { settingsBundleId, startupBundleId }));
-            int uiStaticBundleId = m_assetManager.GetBundleId("win32/_pvz/ui/flow/bundle/uidefaultstaticbundle");
-            m_staticBundleIds.Add(uiStaticBundleId);
-            m_bundleAndParents.Add(uiStaticBundleId, (new List<int>(), new List<int>() { settingsBundleId, startupBundleId, configBundleId }));  
+
+            if (!IsBfn)
+            {
+                int uiStaticBundleId = m_assetManager.GetBundleId("win32/_pvz/ui/flow/bundle/uidefaultstaticbundle");
+                m_staticBundleIds.Add(uiStaticBundleId);
+                m_bundleAndParents.Add(uiStaticBundleId, (new List<int>(), new List<int>() { settingsBundleId, startupBundleId, configBundleId }));
+            }
+            else
+            {
+                int installedGlobalSharedBId = m_assetManager.GetBundleId("Win32/gameplay/bundling/installed_globalsharedbundleasset");
+                m_staticBundleIds.Add(installedGlobalSharedBId);
+                m_bundleAndParents.Add(installedGlobalSharedBId, (new List<int>(), new List<int>() { settingsBundleId, startupBundleId, configBundleId }));
+
+                int installedCharSharedBId = m_assetManager.GetBundleId("Win32/installchunks/installed_characterssharedbundleasset");
+                m_staticBundleIds.Add(installedCharSharedBId);
+                m_bundleAndParents.Add(installedCharSharedBId, (new List<int>(), new List<int>() { settingsBundleId, startupBundleId, configBundleId, installedGlobalSharedBId }));
+            }
         }
 
         private void EnumerateSharedBundles()
@@ -842,7 +992,7 @@ namespace GW2BundleManagerPlugin
 
                 foreach (dynamic bundle in refRoot.Bundles)
                 {
-                    string bundleName = $"win32/{bundle.Name.ToString().ToLower()}";
+                    string bundleName = (IsBfn ? "Win32/" : "win32/") + bundle.Name.ToString().ToLower();
                     int bundleId = m_assetManager.GetBundleId(bundleName);
                     if(m_bundleAndParents.ContainsKey(bundleId))
                     {
@@ -864,56 +1014,6 @@ namespace GW2BundleManagerPlugin
                 {
                     continue;
                 }
-                /*
-                List<BundleEntry> parentBundles = new List<BundleEntry>();
-                List<BundleEntry> parallelBundles = new List<BundleEntry>();
-                WriteToLog("Finding parents of {0}", bundleEntry.Name);
-                foreach (EbxAssetEntry entry in m_assetManager.EnumerateEbx(bundleEntry))
-                {
-                    foreach (Guid ebxRefGuid in entry.DependentAssets)
-                    {
-                        EbxAssetEntry refEntry = m_assetManager.GetEbxEntry(ebxRefGuid);
-                        if (!refEntry.IsInBundle(bundleId))
-                        {
-                            foreach (int otherBundleId in refEntry.Bundles)
-                            {
-                                BundleEntry otherBundleEntry = m_assetManager.GetBundleEntry(otherBundleId);
-                                if (otherBundleEntry.Type == BundleType.SharedBundle && !parentBundles.Contains(otherBundleEntry))
-                                {
-                                    parentBundles.Add(otherBundleEntry);
-                                }
-                            }
-                        }
-                        else //if(refEntry.IsInBundle(bundleId))
-                        {
-                            foreach (int otherBundleId in refEntry.Bundles)
-                            {
-                                BundleEntry otherBundleEntry = m_assetManager.GetBundleEntry(otherBundleId);
-                                if (otherBundleEntry.Type == BundleType.SharedBundle && !parallelBundles.Contains(otherBundleEntry))
-                                {
-                                    parallelBundles.Add(otherBundleEntry);
-                                }
-                            }
-                        }
-                    }
-                }
-                foreach (BundleEntry otherBundleEntry in parallelBundles)
-                {
-                    if (parentBundles.Contains(otherBundleEntry))
-                    {
-                        parentBundles.Remove(otherBundleEntry);
-                    }
-                }
-                if (parentBundles.Count > 0)
-                {
-                    List<int> parentIds = new List<int>();
-                    foreach (BundleEntry otherBundleEntry in parentBundles)
-                    {
-                        parentIds.Add(m_assetManager.GetBundleId(otherBundleEntry));
-                    }
-                    m_bundleAndParents.Add(bundleId, parentIds);
-                }
-                */
                 m_bundleAndParents.Add(bundleId, (new List<int>(), m_staticBundleIds));
             }
         }
@@ -947,7 +1047,7 @@ namespace GW2BundleManagerPlugin
 
                 foreach (dynamic bundle in refRoot.Bundles)
                 {
-                    string bundleName = $"win32/{bundle.Name.ToString().ToLower()}";
+                    string bundleName = (IsBfn ? "Win32/" : "win32/") + bundle.Name.ToString().ToLower();
                     int bundleId = m_assetManager.GetBundleId(bundleName);
                     if (bundleId == -1 || bundle.Name.ToString() == levelName)
                     {
@@ -965,15 +1065,16 @@ namespace GW2BundleManagerPlugin
         private void SearchLevelData(string levelName, List<int> prevLoads, List<int> parents, bool subworldSearch)
         {
             WriteToLog(string.Format("Searching {0} {1}", subworldSearch == true ? "SubworldData" : "LevelData", levelName));
-            string levelBundleName = $"win32/{levelName.ToLower()}";
+            string levelBundleName = (IsBfn ? "Win32/" : "win32/") + levelName.ToLower();
 
             int levelBundleId = m_assetManager.GetBundleId(levelBundleName);
             // Level_Hub_Tacobandits has 2 invalid subworlds
-            if (levelBundleId == -1 && subworldSearch)
+            if ((levelBundleId == -1 && subworldSearch) || m_bundleAndParents.ContainsKey(levelBundleId))
             {
                 //App.Logger.Log("[Warning] Subworld doesn't exist, skipping");
                 return;
             }
+
             m_bundleAndParents.Add(levelBundleId, (prevLoads, parents));
             List<int> newParents = new List<int> { levelBundleId };
             EbxAssetEntry refEntry = m_assetManager.GetEbxEntry(levelName);

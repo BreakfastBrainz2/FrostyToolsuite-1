@@ -2,13 +2,14 @@ using Frosty.Core;
 using FrostySdk;
 using FrostySdk.IO;
 using FrostySdk.Managers;
+using FrostySdk.Managers.Entries;
 using FrostySdk.Resources;
-using GW2BundleManagerPlugin.Ports.Classes.Resources;
+using PvZBundleManagerPlugin.Ports.Classes.Resources;
 using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace GW2BundleManagerPlugin.Ports.Classes.AssetHandlers.Common
+namespace PvZBundleManagerPlugin.Ports.Classes.AssetHandlers.Common
 {
     public class AtlasTextureAssetHandler : BaseAssetHandler
     {

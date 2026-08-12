@@ -3,12 +3,13 @@ using FrostySdk;
 using FrostySdk.Ebx;
 using FrostySdk.IO;
 using FrostySdk.Managers;
+using FrostySdk.Managers.Entries;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace GW2BundleManagerPlugin.Ports.Classes
+namespace PvZBundleManagerPlugin.Ports.Classes
 {
     public class BaseAssetHandler
     {
@@ -90,7 +91,7 @@ namespace GW2BundleManagerPlugin.Ports.Classes
                 Stream baseAssetEntry = App.AssetManager.GetEbxStream(basedOnEntry);
 
                 // Create an ebx reader based on the selected profile
-                using (EbxReader ebxReader = EbxReader.CreateReader(baseAssetEntry, App.FileSystem, true))
+                using (EbxReader ebxReader = EbxReader.CreateReader(baseAssetEntry, App.FileSystemManager, true))
                 {
                     // Set the asset to the ebx reader's resolved data
                     ebxAsset = ebxReader.ReadAsset<EbxAsset>();

@@ -4,6 +4,7 @@ using FrostySdk;
 using FrostySdk.Ebx;
 using FrostySdk.IO;
 using FrostySdk.Managers;
+using FrostySdk.Managers.Entries;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -16,7 +17,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 
-namespace GW2BundleManagerPlugin.Ports.Classes
+namespace PvZBundleManagerPlugin.Ports.Classes
 {
     public static class TypeExtensions
     {
@@ -194,7 +195,7 @@ namespace GW2BundleManagerPlugin.Ports.Classes
                     }
 
                     // If the current object is not of the type T or if it was skipped, recursively execute FindByType upon it and assign that to the result only if it is null
-                    result ??= (DependencyObject)(object)currentObject.FindByType<T>(includeDerivedTypes, resultsToSkip, returnSkippedResultIfNoResults, navigateDownwards);
+                    result = result ?? (DependencyObject)(object)currentObject.FindByType<T>(includeDerivedTypes, resultsToSkip, returnSkippedResultIfNoResults, navigateDownwards);
 
                     if (result != null)
                     {

@@ -1,6 +1,7 @@
 ﻿using Frosty.Core;
 using Frosty.Core.Windows;
 using FrostySdk.Managers;
+using FrostySdk.Managers.Entries;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,13 +9,13 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Media;
 
-namespace GW2BundleManagerPlugin.Extensions.DECMEs
+namespace PvZBundleManagerPlugin.Extensions.DECMEs
 {
     public class ManageBundles : DataExplorerContextMenuExtension
     {
         public override string ContextItemName => "Manage Bundles";
 
-        public override ImageSource Icon => (ImageSource)new ImageSourceConverter().ConvertFromString("pack://application:,,,/GW2BundleManagerPlugin;component/Resources/Icons/Manage.png");
+        public override ImageSource Icon => (ImageSource)new ImageSourceConverter().ConvertFromString("pack://application:,,,/PVZBundleManagerPlugin;component/Resources/Icons/Manage.png");
 
         public override RelayCommand ContextItemClicked => new RelayCommand(delegate (object execute)
         {

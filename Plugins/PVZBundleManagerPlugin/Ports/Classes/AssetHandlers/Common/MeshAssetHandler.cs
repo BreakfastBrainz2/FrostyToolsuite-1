@@ -5,7 +5,8 @@ using FrostySdk;
 using FrostySdk.Ebx;
 using FrostySdk.IO;
 using FrostySdk.Managers;
-using GW2BundleManagerPlugin.Ports.Classes.Resources;
+using FrostySdk.Managers.Entries;
+using PvZBundleManagerPlugin.Ports.Classes.Resources;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,7 +14,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GW2BundleManagerPlugin.Ports.Classes.AssetHandlers.Common
+namespace PvZBundleManagerPlugin.Ports.Classes.AssetHandlers.Common
 {
     public class MeshAssetHandler : BaseAssetHandler
     {
@@ -31,13 +32,14 @@ namespace GW2BundleManagerPlugin.Ports.Classes.AssetHandlers.Common
             EbxAssetEntry result = null;
 
             // Find any database in the bundle that the mesh is now in, so that we can add to it
-            foreach (EbxAssetEntry curDb in App.AssetManager.EnumerateEbx(
-                "MeshVariationDatabase",
-                bundleSubPath: inBundle.Name
-            ))
+
+            foreach (EbxAssetEntry curDb in App.AssetManager.EnumerateEbx(inBundle))
             {
-                result = curDb;
-                break;
+                if (TypeLibrary.IsSubClassOf(curDb.Type, "MeshVariationDatabase"))
+                {
+                    result = curDb;
+                    break;
+                }
             }
 
             // If no database was found, create a new one
@@ -143,12 +145,15 @@ namespace GW2BundleManagerPlugin.Ports.Classes.AssetHandlers.Common
                 // We need to update the registries to allow for the mesh to be used
                 EbxAssetEntry firstBdlMeshDb = GetBundleMeshVarDb(bentry);
 
-                // Add the textures of the entry to the bundle
-                foreach (EbxAssetEntry curTextureEntry in GetMeshVarTextures(eVDAVariation))
+                if (!ProfilesLibrary.IsLoaded(ProfileVersion.PlantsVsZombiesBattleforNeighborville))
                 {
-                    if(!Plugin.BundleManager.CanBeLoadedByBundle(curTextureEntry, bundleId))
+                    // Add the textures of the entry to the bundle
+                    foreach (EbxAssetEntry curTextureEntry in GetMeshVarTextures(eVDAVariation))
                     {
-                        AssetHandlerDB.GetAssetHandler(curTextureEntry.Type).AddToBundle(curTextureEntry, bentry);
+                        if (!Plugin.BundleManager.CanBeLoadedByBundle(curTextureEntry, bundleId))
+                        {
+                            AssetHandlerDB.GetAssetHandler(curTextureEntry.Type).AddToBundle(curTextureEntry, bentry);
+                        }
                     }
                 }
 

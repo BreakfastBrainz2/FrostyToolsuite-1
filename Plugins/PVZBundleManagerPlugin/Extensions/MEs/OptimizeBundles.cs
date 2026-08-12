@@ -11,9 +11,10 @@ using Frosty.Core;
 using Frosty.Core.Windows;
 using FrostySdk.IO;
 using FrostySdk.Managers;
-using GW2BundleManagerPlugin.Ports.Classes;
+using FrostySdk.Managers.Entries;
+using PvZBundleManagerPlugin.Ports.Classes;
 
-namespace GW2BundleManagerPlugin.Extensions.MEs
+namespace PvZBundleManagerPlugin.Extensions.MEs
 {
     public class OptimizeBundles : MenuExtension
     {
@@ -21,7 +22,7 @@ namespace GW2BundleManagerPlugin.Extensions.MEs
 
         public override string TopLevelMenuName => "GW2 Bundle Manager";
 
-        public override ImageSource Icon => (ImageSource)new ImageSourceConverter().ConvertFromString("pack://application:,,,/GW2BundleManagerPlugin;component/Resources/Icons/Manage.png");
+        public override ImageSource Icon => (ImageSource)new ImageSourceConverter().ConvertFromString("pack://application:,,,/PvZBundleManagerPlugin;component/Resources/Icons/Manage.png");
 
         private HashSet<EbxAssetEntry> mEbxEntries => App.AssetManager.EnumerateEbx().ToHashSet();
 

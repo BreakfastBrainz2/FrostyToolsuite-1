@@ -10,14 +10,14 @@ using System.Threading.Tasks;
 
 namespace PvZBundleManagerPlugin.Ports.Classes.AssetHandlers.Common
 {
-    public class HavokAssetHandler : BaseAssetHandler
+    public class PhysicsAssetHandler : BaseAssetHandler
     {
-        public override string AssetType => "HavokAsset";
+        public override string AssetType => "PhysicsAsset";
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="HavokAssetHandler"/> class.
+        /// Initializes a new instance of the <see cref="PhysicsAssetHandler"/> class.
         /// </summary>
-        public HavokAssetHandler()
+        public PhysicsAssetHandler()
         {
         }
 

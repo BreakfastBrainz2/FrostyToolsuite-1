@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GW2BundleManagerPlugin
+namespace PvZBundleManagerPlugin
 {
     /// <summary>
     /// Serves as a host for singleton instances of classes essential to the functionality of this plugin, akin to Frosty's <see cref="App"/> class.
@@ -16,6 +16,6 @@ namespace GW2BundleManagerPlugin
         public static BundleManager BundleManager
         {
             get;
-        } = new BundleManager(App.AssetManager, App.FileSystem);
+        } = new BundleManager(App.AssetManager, App.FileSystemManager);
     }
 }

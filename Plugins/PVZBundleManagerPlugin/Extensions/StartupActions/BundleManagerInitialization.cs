@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GW2BundleManagerPlugin.Extensions.StartupActions
+namespace PvZBundleManagerPlugin.Extensions.StartupActions
 {
     public class BundleManagerInitialization : StartupAction
     {

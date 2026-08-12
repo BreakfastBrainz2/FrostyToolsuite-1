@@ -3,8 +3,9 @@ using System.Windows;
 using Frosty.Controls;
 using Frosty.Core;
 using FrostySdk.Managers;
+using FrostySdk.Managers.Entries;
 
-namespace GW2BundleManagerPlugin.Windows
+namespace PvZBundleManagerPlugin.Windows
 {
     /// <summary>
     /// Interaction logic for AddProfileWindow.xaml

@@ -4,12 +4,13 @@ using Frosty.Hash;
 using FrostySdk;
 using FrostySdk.IO;
 using FrostySdk.Managers;
+using FrostySdk.Managers.Entries;
 using FrostySdk.Resources;
 using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace GW2BundleManagerPlugin.Ports.Classes.AssetHandlers.Common
+namespace PvZBundleManagerPlugin.Ports.Classes.AssetHandlers.Common
 {
     public class TextureAssetHandler : BaseAssetHandler
     {

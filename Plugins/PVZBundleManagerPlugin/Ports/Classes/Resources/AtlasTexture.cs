@@ -1,11 +1,12 @@
 ﻿using FrostySdk;
 using FrostySdk.IO;
 using FrostySdk.Managers;
+using FrostySdk.Managers.Entries;
 using FrostySdk.Resources;
 using System;
 using System.IO;
 
-namespace GW2BundleManagerPlugin.Ports.Classes.Resources
+namespace PvZBundleManagerPlugin.Ports.Classes.Resources
 {
     public class AtlasTexture : Resource
     {

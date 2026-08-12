@@ -8,7 +8,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GW2BundleManagerPlugin.Ports.Classes
+namespace PvZBundleManagerPlugin.Ports.Classes
 {
     public static class AssetHandlerDB
     {
@@ -23,7 +23,7 @@ namespace GW2BundleManagerPlugin.Ports.Classes
         public static BaseAssetHandler GetAssetHandler(string inType, bool inIncludeSubclasses = true)
         {
             // If the given type is null, simply use the base asset handler
-            inType ??= "null";
+            inType = inType ?? "null";
 
             if (assetHandlers.ContainsKey(inType))
                 return assetHandlers[inType];

@@ -7,8 +7,9 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using FrostySdk;
 using FrostySdk.Resources;
+using FrostySdk.Managers.Entries;
 
-namespace GW2BundleManagerPlugin.Ports.Classes.Resources
+namespace PvZBundleManagerPlugin.Ports.Classes.Resources
 {
     internal class MeshContainer
     {

@@ -2,10 +2,11 @@ using Frosty.Core;
 using FrostySdk;
 using FrostySdk.IO;
 using FrostySdk.Managers;
+using FrostySdk.Managers.Entries;
 using System;
 using System.Collections.Generic;
 
-namespace GW2BundleManagerPlugin.Ports.Classes.AssetHandlers.Common
+namespace PvZBundleManagerPlugin.Ports.Classes.AssetHandlers.Common
 {
     public class SoundWaveAssetHandler : BaseAssetHandler
     {

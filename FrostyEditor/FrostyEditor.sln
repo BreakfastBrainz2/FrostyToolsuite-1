@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.13.35931.197
+# Visual Studio Version 18
+VisualStudioVersion = 18.8.12023.21 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FrostyEditor", "FrostyEditor.csproj", "{355B078B-45A5-472D-9CCD-688D8E30BAED}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -118,6 +118,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlueprintEditorPlugin", "..\Plugins\BlueprintEditorPlugin\BlueprintEditorPlugin.csproj", "{5317E543-7B9E-201B-55B6-666D950A8E66}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssetBankPlugin", "..\Plugins\AssetBankPlugin\AssetBankPlugin.csproj", "{A721694B-4D2F-8B6C-21C8-E46D1C843E29}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PvZBundleManagerPlugin", "..\Plugins\PvZBundleManagerPlugin\PvZBundleManagerPlugin.csproj", "{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -598,6 +600,16 @@ Global
 		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release - Final|x64.Build.0 = Release - Final|x64
 		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release|x64.ActiveCfg = Release - Alpha|x64
 		{A721694B-4D2F-8B6C-21C8-E46D1C843E29}.Release|x64.Build.0 = Release - Alpha|x64
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}.Developer - Debug|x64.ActiveCfg = Developer - Debug|x64
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}.Developer - Debug|x64.Build.0 = Developer - Debug|x64
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}.Release - Alpha|x64.ActiveCfg = Release - Alpha|x64
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}.Release - Alpha|x64.Build.0 = Release - Alpha|x64
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}.Release - Beta|x64.ActiveCfg = Release - Beta|x64
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}.Release - Beta|x64.Build.0 = Release - Beta|x64
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}.Release - Final|x64.ActiveCfg = Release - Final|x64
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}.Release - Final|x64.Build.0 = Release - Final|x64
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}.Release|x64.ActiveCfg = Release - Alpha|x64
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C}.Release|x64.Build.0 = Release - Alpha|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -641,6 +653,7 @@ Global
 		{973CC29C-0845-EEED-EE19-AC2943057D93} = {492048B6-848D-4675-A9BF-34A4751303F2}
 		{5317E543-7B9E-201B-55B6-666D950A8E66} = {492048B6-848D-4675-A9BF-34A4751303F2}
 		{A721694B-4D2F-8B6C-21C8-E46D1C843E29} = {492048B6-848D-4675-A9BF-34A4751303F2}
+		{86C81923-6BA2-5062-0D8A-ACB3CB2E6A0C} = {492048B6-848D-4675-A9BF-34A4751303F2}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C0B22EF1-4C3F-45B9-9F08-9793ED912199}
