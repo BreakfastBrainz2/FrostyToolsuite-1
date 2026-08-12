@@ -849,14 +849,39 @@ namespace FrostySdk
 
         private static Dictionary<int, string> strings = new Dictionary<int, string>();
 
+        private sealed class StringIndex
+        {
+            public int[] Hashes = Array.Empty<int>();     
+            public int[] Offsets = Array.Empty<int>();         
+            public int[] Lengths = Array.Empty<int>();       
+            public byte[] Blob = Array.Empty<byte>();
+            public int BlobOffset;                                 
+        }
+        private static StringIndex s_stringIndex = new StringIndex();
+
         public static string GetString(int hash)
         {
-            if (!strings.ContainsKey(hash))
+            StringIndex idx = s_stringIndex;
+            int lo = 0, hi = idx.Hashes.Length - 1;
+            while (lo <= hi)
             {
-                return "0x" + hash.ToString("x8");
+                int mid = (lo + hi) >> 1;
+                int h = idx.Hashes[mid];
+                if (h == hash)
+                {
+                    return Encoding.UTF8.GetString(idx.Blob, idx.BlobOffset + idx.Offsets[mid], idx.Lengths[mid]);
+                }
+                if (h < hash)
+                {
+                    lo = mid + 1;
+                }
+                else
+                {
+                    hi = mid - 1;
+                }
             }
 
-            return strings[hash];
+            return "0x" + hash.ToString("x8");
         }
 
         public static string ReverseString(string str)
@@ -1280,7 +1305,7 @@ namespace FrostySdk
                 part2 += part1;
             }
 
-            return (uint)((int)((part1 & 0xFFFF0000) + (part1 << 16)) | ((ushort)part2 + (part2 >> 16)));
+            return ((part1 & 0xFFFF0000) + (part1 << 16)) | ((ushort)part2 + (part2 >> 16));
         }
 
 
@@ -1291,8 +1316,30 @@ namespace FrostySdk
             int hash = 5381;
             const int prime = 33;
 
-            int maxBytes = Encoding.UTF8.GetMaxByteCount(data.Length);
+            fixed (char* pData = data)
+            {
+                char* p = pData;
+                char* pEnd = pData + data.Length;
+                while (p < pEnd)
+                {
+                    char c = *p;
+                    if (c >= 0x80)
+                    {
+                        return FastHashStringFallback(data);
+                    }
+                    hash = (hash * prime) ^ (byte)c;
+                    p++;
+                }
+                return hash;
+            }
+        }
 
+        private static unsafe int FastHashStringFallback(string data)
+        {
+            int hash = 5381;
+            const int prime = 33;
+
+            int maxBytes = Encoding.UTF8.GetMaxByteCount(data.Length);
             if (maxBytes <= 4096)
             {
                 byte* buffer = stackalloc byte[maxBytes];
@@ -1321,61 +1368,274 @@ namespace FrostySdk
             {
                 return;
             }
-            strings.Clear();
 
-            const int bufferSize = 1024 * 1024;
+            long sourceSize = new FileInfo(path).Length;
+            long sourceTicks = File.GetLastWriteTimeUtc(path).Ticks;
 
-            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, FileOptions.SequentialScan))
+            string cachePath = Path.Combine(Path.GetDirectoryName(path) ?? "", "Caches",
+                Path.GetFileNameWithoutExtension(path) + ".cache");
+
+            if (TryLoadStringCache(cachePath, path, sourceSize, sourceTicks))
             {
-                long totalLength = fs.Length;
-                if (totalLength == 0)
+                logger?.Log("progress:100.0");
+                return;
+            }
+
+            s_stringIndex = ParseStringFile(path, sourceSize, logger);
+
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(cachePath) ?? ".");
+                string tmpPath = cachePath + ".tmp";
+                using (FileStream fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20, FileOptions.SequentialScan))
                 {
-                    return;
+                    WriteStringCache(fs, path, s_stringIndex, sourceSize, sourceTicks);
                 }
-
-                using (StreamReader reader = new StreamReader(fs, Encoding.UTF8, true, bufferSize))
+                if (File.Exists(cachePath))
                 {
-                    string currentString;
+                    File.Delete(cachePath);
+                }
+                File.Move(tmpPath, cachePath);
+            }
+            catch
+            {
+            }
+        }
 
-                    if (logger != null)
+        private const string StringCacheMagic = "FRSTYCC2";
+        private static readonly byte[] StringCacheMagicBytes = Encoding.ASCII.GetBytes(StringCacheMagic);
+        private const int StringCacheVersion = 2;
+
+        private static int ReadInt32LE(byte[] data, int offset)
+        {
+            return data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
+        }
+
+        private static long ReadInt64LE(byte[] data, int offset)
+        {
+            return (uint)data[offset] | ((uint)data[offset + 1] << 8) | ((uint)data[offset + 2] << 16) | ((uint)data[offset + 3] << 24)
+                | ((long)data[offset + 4] << 32) | ((long)data[offset + 5] << 40) | ((long)data[offset + 6] << 48) | ((long)data[offset + 7] << 56);
+        }
+
+        private static int HashBytes(byte[] data, int offset, int length)
+        {
+            if (length == 0) return 5381;
+
+            int hash = 5381;
+            const int prime = 33;
+            for (int i = offset; i < offset + length; i++)
+            {
+                hash = (hash * prime) ^ data[i];
+            }
+            return hash;
+        }
+
+        private static StringIndex ParseStringFile(string path, long sourceSize, ILogger logger)
+        {
+            byte[] data = File.ReadAllBytes(path);
+
+            int estimated = (int)Math.Min(sourceSize / 40, 5_000_000);
+            var entries = new List<StringEntry>(estimated);
+            var seenHashes = new HashSet<int>(estimated);
+
+            int start = (data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF) ? 3 : 0;
+
+            int i = start;
+            int lineStart = start;
+            double lastReportedProgress = -1.0;
+            int lineCount = 0;
+
+            while (i <= data.Length)
+            {
+                bool eof = i == data.Length;
+                byte b = eof ? (byte)0x0A : data[i];
+                bool isLineEnd = eof || b == 0x0A || b == 0x0D;
+
+                if (isLineEnd && (lineStart < i || !eof))
+                {
+                    int lineEnd = i;
+                    if (lineEnd > lineStart && data[lineEnd - 1] == 0x0D)
                     {
-                        double lastReportedProgress = -1.0;
-                        int lineCount = 0;
+                        lineEnd--;  
+                    }
 
-                        while ((currentString = reader.ReadLine()) != null)
-                        {
-                            int hash = FastHashString(currentString);
+                    int hash = HashBytes(data, lineStart, lineEnd - lineStart);
+                    if (seenHashes.Add(hash))
+                    {
+                        entries.Add(new StringEntry { Hash = hash, Offset = lineStart, Length = lineEnd - lineStart });
+                    }
 
-                            if (!strings.ContainsKey(hash))
-                            {
-                                strings.Add(hash, currentString);
-                            }
-
-                            if ((++lineCount & 4095) == 0)
-                            {
-                                double currentProgress = ((double)fs.Position / totalLength) * 100.0;
-                                if (currentProgress - lastReportedProgress >= 1.0)
-                                {
-                                    logger.Log("progress:" + currentProgress);
-                                    lastReportedProgress = currentProgress;
-                                }
-                            }
-                        }
-
-                        logger.Log("progress:100.0");
+                    if (!eof && b == 0x0D && i + 1 < data.Length && data[i + 1] == 0x0A)
+                    {
+                        lineStart = i + 2;
+                        i++;
                     }
                     else
                     {
-                        while ((currentString = reader.ReadLine()) != null)
+                        lineStart = i + 1;
+                    }
+
+                    if (logger != null && (++lineCount & 4095) == 0)
+                    {
+                        double currentProgress = ((double)i / data.Length) * 100.0;
+                        if (currentProgress - lastReportedProgress >= 1.0)
                         {
-                            int hash = FastHashString(currentString);
-                            if (!strings.ContainsKey(hash))
-                            {
-                                strings.Add(hash, currentString);
-                            }
+                            logger.Log("progress:" + currentProgress);
+                            lastReportedProgress = currentProgress;
                         }
                     }
                 }
+                i++;
+            }
+
+            logger?.Log("progress:100.0");
+
+            entries.Sort((StringEntry a, StringEntry b) => a.Hash.CompareTo(b.Hash));
+            int count = entries.Count;
+            var index = new StringIndex
+            {
+                Hashes = new int[count],
+                Offsets = new int[count],
+                Lengths = new int[count],
+                Blob = data,
+                BlobOffset = 0
+            };
+            for (int e = 0; e < count; e++)
+            {
+                index.Hashes[e] = entries[e].Hash;
+                index.Offsets[e] = entries[e].Offset;
+                index.Lengths[e] = entries[e].Length;
+            }
+            return index;
+        }
+
+        private struct StringEntry
+        {
+            public int Hash;
+            public int Offset;
+            public int Length;
+        }
+
+        private static void WriteStringCache(FileStream stream, string sourcePath, StringIndex index, long sourceSize, long sourceTicks)
+        {
+            using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
+            {
+                writer.Write(StringCacheMagicBytes);
+                writer.Write(StringCacheVersion);
+                writer.Write(sourceSize);
+                writer.Write(sourceTicks);
+                writer.Write(ComputeHeadTailChecksum(sourcePath));
+                writer.Write(index.Hashes.Length);
+
+                long total = 0;
+                for (int i = 0; i < index.Lengths.Length; i++) total += index.Lengths[i];
+                byte[] blob = new byte[total];
+                int[] blobOffsets = new int[index.Hashes.Length];
+                int pos = 0;
+                for (int i = 0; i < index.Hashes.Length; i++)
+                {
+                    blobOffsets[i] = pos;
+                    Buffer.BlockCopy(index.Blob, index.BlobOffset + index.Offsets[i], blob, pos, index.Lengths[i]);
+                    pos += index.Lengths[i];
+                }
+
+                foreach (int h in index.Hashes) writer.Write(h);
+                foreach (int o in blobOffsets) writer.Write(o);
+                foreach (int l in index.Lengths) writer.Write(l);
+                writer.Write(blob);
+            }
+        }
+
+        private static bool TryLoadStringCache(string cachePath, string sourcePath, long sourceSize, long sourceTicks)
+        {
+            if (!File.Exists(cachePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                byte[] data = File.ReadAllBytes(cachePath);
+
+                const int headerSize = 8 + 4 + 8 + 8 + 4 + 4;            
+                if (data.Length < headerSize)
+                {
+                    return false;
+                }
+                for (int i = 0; i < StringCacheMagicBytes.Length; i++)
+                {
+                    if (data[i] != StringCacheMagicBytes[i])
+                    {
+                        return false;
+                    }
+                }
+
+                if (ReadInt32LE(data, 8) != StringCacheVersion) return false;
+                long size = ReadInt64LE(data, 12);
+                long ticks = ReadInt64LE(data, 20);
+                uint checksum = (uint)ReadInt32LE(data, 28);
+                int count = ReadInt32LE(data, 32);
+
+                if (size != sourceSize || ticks != sourceTicks) return false;
+                if (count < 0 || count > 5_000_000) return false;
+
+                if (ComputeHeadTailChecksum(sourcePath) != checksum) return false;
+
+                long indexBytes = (long)count * 4 * 3;      
+                long blobOffset = headerSize + indexBytes;
+                if (blobOffset > data.Length) return false;
+
+                var index = new StringIndex
+                {
+                    Hashes = new int[count],
+                    Offsets = new int[count],
+                    Lengths = new int[count],
+                    Blob = data,
+                    BlobOffset = (int)blobOffset
+                };
+
+                Buffer.BlockCopy(data, headerSize, index.Hashes, 0, count * 4);
+                Buffer.BlockCopy(data, headerSize + count * 4, index.Offsets, 0, count * 4);
+                Buffer.BlockCopy(data, headerSize + count * 8, index.Lengths, 0, count * 4);
+
+                int prevHash = int.MinValue;
+                for (int i = 0; i < count; i++)
+                {
+                    int h = index.Hashes[i];
+                    int off = index.Offsets[i];
+                    int len = index.Lengths[i];
+
+                    if (h <= prevHash || off < 0 || len < 0 || blobOffset + off + len > data.Length)
+                    {
+                        return false;
+                    }
+                    prevHash = h;
+                }
+
+                s_stringIndex = index;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static uint ComputeHeadTailChecksum(string path)
+        {
+            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, FileOptions.SequentialScan))
+            {
+                byte[] head = new byte[4096];
+                int headCount = fs.Read(head, 0, 4096);
+
+                byte[] tail = new byte[4096];
+                fs.Position = Math.Max(0, fs.Length - 4096);
+                int tailCount = fs.Read(tail, 0, 4096);
+
+                uint h = 5381;
+                for (int i = 0; i < headCount; i++) h = (h * 33) ^ head[i];
+                for (int i = 0; i < tailCount; i++) h = (h * 33) ^ tail[i];
+                return h;
             }
         }
     }
