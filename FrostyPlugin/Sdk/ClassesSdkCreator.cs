@@ -199,7 +199,7 @@ namespace Frosty.Core.Sdk
 
     public class ModuleWriter : IDisposable
     {
-        private List<string> CreateOldFb3PFs() => new List<string>
+        private static List<string> CreateOldFb3PFs() => new List<string>
         {
             "RenderFormat_BC1_UNORM",
             "RenderFormat_BC1A_UNORM",
@@ -259,8 +259,9 @@ namespace Frosty.Core.Sdk
             "RenderFormat_Unknown"
         };
 
-        private DbObject m_classList;
-        private string m_filename;
+        private readonly DbObject m_classList;
+        private readonly string m_filename;
+        private Dictionary<string, DbObject> m_classByNameMap;
 
         public ModuleWriter(string inFilename, DbObject inList)
         {
@@ -268,8 +269,23 @@ namespace Frosty.Core.Sdk
             m_classList = inList;
         }
 
+        private void BuildClassMap()
+        {
+            m_classByNameMap = new Dictionary<string, DbObject>(StringComparer.Ordinal);
+            foreach (DbObject obj in m_classList)
+            {
+                string name = obj.GetValue<string>("name");
+                if (!string.IsNullOrEmpty(name))
+                {
+                    m_classByNameMap[name] = obj;
+                }
+            }
+        }
+
         public void Write(uint version)
         {
+            BuildClassMap();
+
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
@@ -278,7 +294,7 @@ namespace Frosty.Core.Sdk
             sb.AppendLine("using System.Reflection;");
             sb.AppendLine("using FrostySdk;");
             sb.AppendLine();
-            sb.AppendLine("[assembly: SdkVersion(" + (int)version + ")]");
+            sb.AppendLine($"[assembly: SdkVersion({(int)version})]");
             sb.AppendLine();
             sb.AppendLine("namespace FrostySdk.Ebx");
             sb.AppendLine("{");
@@ -334,10 +350,8 @@ namespace Frosty.Core.Sdk
             }
             sb.AppendLine("}");
 
-            using (NativeWriter writer = new NativeWriter(new FileStream("temp.cs", FileMode.Create)))
-            {
-                writer.WriteLine(sb.ToString());
-            }
+            File.WriteAllText("temp.cs", sb.ToString());
+
 
             CSharpCodeProvider provider = new CSharpCodeProvider();
 
@@ -358,16 +372,18 @@ namespace Frosty.Core.Sdk
             {
                 using (NativeWriter writer = new NativeWriter(new FileStream("Errors.txt", FileMode.Create)))
                 {
+                    writer.WriteLine("Compilation Failed:");
                     foreach (CompilerError error in results.Errors)
                     {
                         writer.WriteLine("[Line: " + error.Line + "]: " + error.ErrorText);
                     }
+                    writer.WriteLine("Generated sources kept in temp.cs for inspection.");
                 }
             }
             else
 #endif
             {
-                File.Delete("temp.cs");
+                if (File.Exists("temp.cs")) File.Delete("temp.cs");
             }
         }
 
@@ -377,37 +393,77 @@ namespace Frosty.Core.Sdk
             {
                 sb.Append(WriteClassAttributes(delegateObj));
                 string returnType = "void";
+                string delegateName = delegateObj.GetValue<string>("name");
 
-                StringBuilder inputParams = new StringBuilder();
+                List<string> parameters = new List<string>();
                 {
                     foreach (DbObject parameterObj in delegateObj.GetValue<DbObject>("parameters"))
                     {
                         switch (parameterObj.GetValue<byte>("parameterType"))
                         {
                             case 0:
-                                inputParams.Append(string.Format("{0} {1}, ", parameterObj.GetValue<string>("baseType"), parameterObj.GetValue<string>("name")));
+                            case 2: // in ptr
+                                parameters.Add($"{parameterObj.GetValue<string>("baseType")} {parameterObj.GetValue<string>("name")}");
                                 break;
                             case 1:
-                                returnType = parameterObj.GetValue<string>("baseType");
-                                break;
-                            case 2:
-                                // in ptr
-                                inputParams.Append(string.Format("{0} {1}, ", parameterObj.GetValue<string>("baseType"), parameterObj.GetValue<string>("name")));
-                                break;
-                            case 3:
-                                // out ptr
+                            case 3: // out ptr
                                 returnType = parameterObj.GetValue<string>("baseType");
                                 break;
                         }
                     }
-                    if (inputParams.Length > 0)
+                    int parenIndex = delegateName.IndexOf('(');
+                    if (parenIndex >= 0 && delegateName.EndsWith(")"))
                     {
-                        inputParams.Remove(inputParams.Length - 2, 2);
+                        string fnName = delegateName.Substring(0, parenIndex);
+                        if (fnName.StartsWith("delegate "))
+                            fnName = fnName.Substring("delegate ".Length);
+
+                        string args = delegateName.Substring(parenIndex + 1, delegateName.Length - parenIndex - 2);
+                        string[] argTypes = args.Split(',');
+                        for (int i = 0; i < argTypes.Length; i++)
+                        {
+                            string typeName = argTypes[i].Trim();
+                            if (typeName.Length == 0)
+                                continue;
+                            parameters.Add(MapBfnTypeName(typeName) + " arg" + parameters.Count);
+                        }
+
+                        delegateName = "Delegate_" + HashDelegateName(delegateName).ToString("x8");
                     }
                 }
-                sb.AppendLine(string.Format("public delegate {0} {1} ({2});", returnType, delegateObj.GetValue<string>("name"), inputParams.ToString()));
+
+                string inputParams = string.Join(", ", parameters);
+                sb.AppendLine($"public delegate {returnType} {delegateName} ({inputParams});");
             }
             return sb.ToString();
+        }
+
+        private static string MapBfnTypeName(string name)
+        {
+            switch (name)
+            {
+                case "Boolean": return "bool";
+                case "Int32": return "int";
+                case "Uint32": return "uint";
+                case "Float32": return "float";
+                case "Float64": return "double";
+                case "EntryInputAction_t": return "int";
+                default: return name;
+            }
+        }
+
+        /// <summary>
+        /// Generates a unique, valid C# identifier suffix for delegate names.
+        /// </summary>
+        private static uint HashDelegateName(string name)
+        {
+            uint hash = 2166136261;
+            foreach (char c in name)
+            {
+                hash ^= (byte)c;
+                hash *= 16777619;
+            }
+            return hash;
         }
 
         private string WriteEnum(DbObject enumObj)
@@ -445,7 +501,7 @@ namespace Frosty.Core.Sdk
                 sb.AppendLine("public class " + className + (parent != "" ? " : " + parent : ""));
                 sb.AppendLine("{");
 
-                if (/*parent == "" &&*/ type == EbxFieldType.Pointer)
+                if (type == EbxFieldType.Pointer)
                 {
                     if (parent == "DataContainer")
                     {
@@ -499,7 +555,6 @@ namespace Frosty.Core.Sdk
                             string displayModuleName = tmpType.GetFields()[0].Name;
                             tmpType = typeof(CString);
                             string funcName1 = tmpType.GetMethods()[0].Name;
-                            string funcName2 = tmpType.GetMethods()[3].Name;
 
                             if (classObj.HasValue("isData"))
                             {
@@ -566,6 +621,10 @@ namespace Frosty.Core.Sdk
                         {
                             continue;
                         }
+                        if (!CanEmitField(fieldObj))
+                        {
+                            continue;
+                        }
 
                         string fieldName = fieldObj.GetValue<string>("name");
                         sb.AppendLine(((z++ != 0) ? "&& " : "") + fieldName + " == b." + fieldName);
@@ -581,6 +640,10 @@ namespace Frosty.Core.Sdk
                         {
                             continue;
                         }
+                        if (!CanEmitField(fieldObj))
+                        {
+                            continue;
+                        }
 
                         string fieldName = fieldObj.GetValue<string>("name");
                         sb.AppendLine("hash = (hash * 16777619) ^ " + fieldName + ".GetHashCode();");
@@ -591,6 +654,52 @@ namespace Frosty.Core.Sdk
                 sb.AppendLine("}");
             }
             return sb.ToString();
+        }
+
+        private static bool CanEmitField(DbObject fieldObj)
+        {
+            DbObject meta = fieldObj.GetValue<DbObject>("meta");
+            if (meta != null && meta.HasValue("version"))
+            {
+                bool bFound = false;
+                foreach (int ver in meta.GetValue<DbObject>("version"))
+                {
+                    if (ver == (int)ProfilesLibrary.DataVersion)
+                    {
+                        bFound = true;
+                        break;
+                    }
+                }
+
+                if (!bFound)
+                {
+                    return false;
+                }
+            }
+
+            EbxFieldType type = (EbxFieldType)fieldObj.GetValue<int>("type");
+            string baseType = fieldObj.GetValue<string>("baseType", "");
+            DbObject typeObj = meta?.GetValue<DbObject>("type");
+            if (typeObj != null)
+            {
+                type = (EbxFieldType)typeObj.GetValue<int>("flags");
+                if (typeObj.HasValue("baseType"))
+                {
+                    baseType = typeObj.GetValue<string>("baseType");
+                }
+            }
+
+            if (type == EbxFieldType.Array)
+            {
+                EbxFieldType arrayType = (EbxFieldType)((fieldObj.GetValue<int>("arrayFlags") >> 4) & 0x1F);
+                if (typeObj != null)
+                {
+                    arrayType = (EbxFieldType)typeObj.GetValue<int>("arrayType");
+                }
+                return GetFieldType(arrayType, baseType) != "";
+            }
+
+            return GetFieldType(type, baseType) != "";
         }
 
         private string WriteField(DbObject fieldObj, DbObject classObj)
@@ -631,8 +740,8 @@ namespace Frosty.Core.Sdk
                     }
                 }
 
-                string fieldType = "";
-                bool requiresDeclaration = false;
+                string fieldType;
+                bool requiresDeclaration;
 
                 sb.Append(WriteFieldAttributes(fieldObj));
                 if (type == EbxFieldType.Array)
@@ -649,11 +758,11 @@ namespace Frosty.Core.Sdk
                 else
                 {
                     fieldType = GetFieldType(type, baseType);
-                    requiresDeclaration = (type == EbxFieldType.ResourceRef 
-                        || type == EbxFieldType.BoxedValueRef 
-                        || type == EbxFieldType.CString 
-                        || type == EbxFieldType.FileRef 
-                        || type == EbxFieldType.TypeRef 
+                    requiresDeclaration = (type == EbxFieldType.ResourceRef
+                        || type == EbxFieldType.BoxedValueRef
+                        || type == EbxFieldType.CString
+                        || type == EbxFieldType.FileRef
+                        || type == EbxFieldType.TypeRef
                         || type == EbxFieldType.Delegate
                         || type == EbxFieldType.Struct);
                 }
@@ -664,29 +773,34 @@ namespace Frosty.Core.Sdk
                 }
 
                 // rename fields that have the same name as inherited ones
-                string parentName = classObj.GetValue<string>("parent");
-                if (parentName != "")
-                {
-                    DbObject parentObj = null;
-                    while (true)
-                    {
-                        parentObj = m_classList.Find<DbObject>((object o) =>
-                        {
-                            return (o as DbObject).GetValue<string>("name") == parentName;
-                        });
-                        if (parentObj == null)
-                        {
-                            break;
-                        }
-                        parentName = parentObj.GetValue<string>("parent");
+                // Replaced linear search via DbObject.Find with O(1) dictionary lookups
 
-                        DbObject fieldMatch = parentObj.GetValue<DbObject>("fields").Find<DbObject>((object o) =>
+                string parentName = classObj.GetValue<string>("parent");
+                while (!string.IsNullOrEmpty(parentName))
+                {
+                    if (!m_classByNameMap.TryGetValue(parentName, out DbObject parentObj))
+                    {
+                        break;
+                    }
+
+                    parentName = parentObj.GetValue<string>("parent");
+
+                    DbObject parentFields = parentObj.GetValue<DbObject>("fields");
+                    if (parentFields != null)
+                    {
+                        bool matchFound = false;
+                        foreach (DbObject pField in parentFields)
                         {
-                            return (o as DbObject).GetValue<string>("name") == fieldName;
-                        });
-                        if (fieldMatch != null)
+                            if (pField.GetValue<string>("name") == fieldName)
+                            {
+                                fieldName += $"_{classObj.GetValue<string>("name")}";
+                                matchFound = true;
+                                break;
+                            }
+                        }
+
+                        if (matchFound)
                         {
-                            fieldName += $"_{classObj.GetValue<string>("name")}";
                             break;
                         }
                     }
@@ -799,12 +913,9 @@ namespace Frosty.Core.Sdk
                 string baseType = (type == EbxFieldType.Pointer || type == EbxFieldType.Array) ? fieldObj.GetValue<string>("baseType", "null") : "null";
                 int flags = fieldObj.GetValue<int>("flags");
 
-                if (type == EbxFieldType.Array)
+                if (type == EbxFieldType.Array && fieldObj.HasValue("guid"))
                 {
-                    if (fieldObj.HasValue("guid"))
-                    {
-                        sb.AppendLine("[" + typeof(GuidAttribute) + "(\"" + fieldObj.GetValue<Guid>("guid").ToString() + "\")]");
-                    }
+                    sb.AppendLine("[" + typeof(GuidAttribute) + "(\"" + fieldObj.GetValue<Guid>("guid") + "\")]");
                 }
 
                 if (meta != null)
@@ -907,7 +1018,7 @@ namespace Frosty.Core.Sdk
             return sb.ToString();
         }
 
-        private string GetFieldType(EbxFieldType type, string baseType)
+        private static string GetFieldType(EbxFieldType type, string baseType)
         {
             switch (type)
             {
@@ -1190,7 +1301,7 @@ namespace Frosty.Core.Sdk
                 TypeInfo = new TypeInfo();
                 TypeInfo.Read(reader);
 
-                if (ProfilesLibrary.IsLoaded(ProfileVersion.StarWarsBattlefrontII, 
+                if (ProfilesLibrary.IsLoaded(ProfileVersion.StarWarsBattlefrontII,
                         ProfileVersion.NeedForSpeedPayback,
                         ProfileVersion.Madden19,
                         ProfileVersion.Fifa18,
@@ -1255,19 +1366,26 @@ namespace Frosty.Core.Sdk
 
         public static long NextOffset;
 
-        private List<ClassInfo> m_classInfos = new List<ClassInfo>();
-        private List<string> m_alreadyProcessedClasses = new List<string>();
-        private Dictionary<long, ClassInfo> m_offsetClassInfoMappings = new Dictionary<long, ClassInfo>();
+        private readonly List<ClassInfo> m_classInfos = new List<ClassInfo>();
+        private readonly HashSet<string> m_alreadyProcessedClasses = new HashSet<string>(StringComparer.Ordinal);
+        private readonly Dictionary<long, ClassInfo> m_offsetClassInfoMappings = new Dictionary<long, ClassInfo>();
 
-        private List<EbxClass> m_processedClasses = new List<EbxClass>();
+        // Changed List<EbxClass> to HashSet<EbxClass> to remove CPU lookup bottleneck
+        private readonly HashSet<EbxClass> m_processedClasses = new HashSet<EbxClass>();
         private Dictionary<string, List<EbxField>> m_fieldMappings;
         private Dictionary<string, Tuple<EbxClass, DbObject>> m_classMappings;
+
+        // Fast lookup maps for CreateSDK loops
+        private Dictionary<string, Tuple<EbxClass, DbObject>> m_nonBasicValueMap;
+        private Dictionary<string, DbObject> m_classMetaMap;
+        private Dictionary<string, Tuple<EbxClass, DbObject>> m_valuesByNameMap;
+        private Dictionary<string, DbObject> m_outListByName = new Dictionary<string, DbObject>(StringComparer.Ordinal);
 
         private List<Tuple<EbxClass, DbObject>> m_values = null;
         private DbObject m_classList = null;
         private DbObject m_classMetaList = null;
 
-        private SdkUpdateState m_state;
+        private readonly SdkUpdateState m_state;
 
         public ClassesSdkCreator(SdkUpdateState inState)
         {
@@ -1372,8 +1490,8 @@ namespace Frosty.Core.Sdk
 
         public bool CrossReferenceAssets(SdkUpdateTask task)
         {
-            m_classMappings = new Dictionary<string, Tuple<EbxClass, DbObject>>();
-            m_fieldMappings = new Dictionary<string, List<EbxField>>();
+            m_classMappings = new Dictionary<string, Tuple<EbxClass, DbObject>>(StringComparer.Ordinal);
+            m_fieldMappings = new Dictionary<string, List<EbxField>>(StringComparer.Ordinal);
 
             if (App.FileSystemManager.HasFileInMemoryFs("SharedTypeDescriptors.ebx"))
             {
@@ -1398,7 +1516,7 @@ namespace Frosty.Core.Sdk
                         continue;
                     }
 
-                    task.StatusMessage = string.Format("{0:0}%", (++index / (float)count) * 100);
+                    task.StatusMessage = $"{((++index / (float)count) * 100):0}%";
                     using (EbxReader reader = EbxReader.CreateReader(ebxStream))
                     {
                         List<EbxClass> classes = reader.ClassTypes;
@@ -1423,6 +1541,12 @@ namespace Frosty.Core.Sdk
                                         idx++;
                                     }
 
+                                    if (foundObj == null)
+                                    {
+                                        Console.WriteLine($"SDK: skipping class '{cl.Name}': no metadata in dumped type list");
+                                        continue;
+                                    }
+
                                     m_classMappings.Add(cl.Name, new Tuple<EbxClass, DbObject>(cl, foundObj));
                                     m_fieldMappings.Add(cl.Name, new List<EbxField>());
 
@@ -1441,12 +1565,41 @@ namespace Frosty.Core.Sdk
             return true;
         }
 
+        private void RebuildFastLookups()
+        {
+            m_nonBasicValueMap = new Dictionary<string, Tuple<EbxClass, DbObject>>(StringComparer.Ordinal);
+            m_valuesByNameMap = new Dictionary<string, Tuple<EbxClass, DbObject>>(StringComparer.Ordinal);
+            foreach (var val in m_values)
+            {
+                m_valuesByNameMap[val.Item1.Name] = val;
+                if (val.Item2 != null && !val.Item2.HasValue("basic") && !m_nonBasicValueMap.ContainsKey(val.Item1.Name))
+                {
+                    m_nonBasicValueMap[val.Item1.Name] = val;
+                }
+            }
+
+            m_classMetaMap = new Dictionary<string, DbObject>(StringComparer.Ordinal);
+            if (m_classMetaList != null)
+            {
+                foreach (DbObject obj in m_classMetaList)
+                {
+                    string name = obj.GetValue<string>("name");
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        m_classMetaMap[name] = obj;
+                    }
+                }
+            }
+        }
+
         public bool CreateSDK()
         {
             DbObject finalList = new DbObject(false);
 
             m_values = m_classMappings.Values.ToList();
-            m_values.Sort((Tuple<EbxClass, DbObject> a, Tuple<EbxClass, DbObject> b) => { return a.Item1.Name.CompareTo(b.Item1.Name); });
+            m_values.Sort((Tuple<EbxClass, DbObject> a, Tuple<EbxClass, DbObject> b) => a.Item1.Name.CompareTo(b.Item1.Name));
+
+            RebuildFastLookups();
 
             Console.WriteLine("Creating SDK");
             for (int z = 0; z < m_values.Count; z++)
@@ -1464,7 +1617,16 @@ namespace Frosty.Core.Sdk
                 int offset = (cl.DebugType == EbxFieldType.Pointer) ? 8 : 0;
                 int fieldIndex = 0;
 
-                ProcessClass(cl, obj, m_fieldMappings[cl.Name], finalList, ref offset, ref fieldIndex);
+                try
+                {
+                    ProcessClass(cl, obj, m_fieldMappings[cl.Name], finalList, ref offset, ref fieldIndex);
+                }
+                catch (Exception e)
+                {
+                    // Surface the exact class so a generator crash can be diagnosed.
+                    Console.WriteLine($"SDK generation failed on class '{cl.Name}': {e}");
+                    throw;
+                }
             }
 
             List<DbObject> supportedClasses = new List<DbObject>();
@@ -1510,10 +1672,13 @@ namespace Frosty.Core.Sdk
                     tmpFields.Add(tmpField);
                 }
 
-                m_values.Add(new Tuple<EbxClass, DbObject>(tmpClass, classObj));
+                var tuple = new Tuple<EbxClass, DbObject>(tmpClass, classObj);
+                m_values.Add(tuple);
                 m_fieldMappings.Add(tmpClass.Name, tmpFields);
                 supportedClasses.Add(classObj);
             }
+
+            RebuildFastLookups();
 
             foreach (DbObject classObj in supportedClasses)
             {
@@ -1523,7 +1688,10 @@ namespace Frosty.Core.Sdk
                     continue;
                 }
 
-                Tuple<EbxClass, DbObject> p = m_values.Find((Tuple<EbxClass, DbObject> a) => { return a.Item2 == classObj; });
+                if (!m_valuesByNameMap.TryGetValue(classObj.GetValue<string>("name"), out Tuple<EbxClass, DbObject> p))
+                {
+                    p = m_values.Find(a => a.Item2 == classObj);
+                }
 
                 int offset = 0;
                 int fieldIndex = 0;
@@ -1536,12 +1704,14 @@ namespace Frosty.Core.Sdk
 
             //TypeLibrary.BuildModule(ProfilesLibrary.SDKFilename, finalList);
             using (ModuleWriter writer = new ModuleWriter("EbxClasses.dll", finalList))
+            {
                 writer.Write(App.FileSystemManager.Head);
+            }
 
             if (File.Exists("EbxClasses.dll"))
             {
                 FileInfo fi = new FileInfo(".\\TmpProfiles\\" + ProfilesLibrary.SDKFilename + ".dll");
-                if (!fi.Directory.Exists)
+                if (fi.Directory != null && !fi.Directory.Exists)
                 {
                     Directory.CreateDirectory(fi.Directory.FullName);
                 }
@@ -1551,6 +1721,14 @@ namespace Frosty.Core.Sdk
                 }
 
                 File.Move("EbxClasses.dll", fi.FullName);
+
+                // Keep the source Profiles folder in sync so a freshly generated SDK
+                // isn't replaced by a stale copy during the next build.
+                string sourceProfiles = FindSourceProfilesDirectory();
+                if (sourceProfiles != null)
+                {
+                    File.Copy(fi.FullName, Path.Combine(sourceProfiles, ProfilesLibrary.SDKFilename + ".dll"), true);
+                }
             }
             else
             {
@@ -1567,6 +1745,26 @@ namespace Frosty.Core.Sdk
             return true;
         }
 
+        /// <summary>
+        /// Resolves the source "FrostySdk\Profiles" folder by going up from the current
+        /// output directory, so a freshly generated SDK can be written back next to the
+        /// existing profile SDKs.
+        /// </summary>
+        private static string FindSourceProfilesDirectory()
+        {
+            DirectoryInfo dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            while (dir != null)
+            {
+                string candidate = Path.Combine(dir.FullName, "FrostySdk", "Profiles");
+                if (Directory.Exists(candidate))
+                {
+                    return candidate;
+                }
+                dir = dir.Parent;
+            }
+            return null;
+        }
+
         private void LoadSharedTypeDescriptors(string name, Dictionary<string, Tuple<EbxClass, DbObject>> mapping, List<Guid> existingClasses)
         {
             Dictionary<uint, DbObject> classMapping = new Dictionary<uint, DbObject>();
@@ -1581,9 +1779,10 @@ namespace Frosty.Core.Sdk
                 classMapping.Add((uint)classObj.GetValue<int>("nameHash"), classObj);
                 foreach (DbObject fieldObj in classObj.GetValue<DbObject>("fields"))
                 {
-                    if (!hashToFieldMapping.ContainsKey((uint)fieldObj.GetValue<int>("nameHash")))
+                    uint fieldHash = (uint)fieldObj.GetValue<int>("nameHash");
+                    if (!hashToFieldMapping.ContainsKey(fieldHash))
                     {
-                        hashToFieldMapping.Add((uint)fieldObj.GetValue<int>("nameHash"), fieldObj.GetValue("name", ""));
+                        hashToFieldMapping.Add(fieldHash, fieldObj.GetValue("name", ""));
                     }
                 }
             }
@@ -1601,14 +1800,14 @@ namespace Frosty.Core.Sdk
                 Guid guid = std.GetGuid(i).Value;
                 existingClasses.Add(guid);
 
-                if (classMapping.ContainsKey(theClass.NameHash))
+                if (classMapping.TryGetValue(theClass.NameHash, out DbObject classObj))
                 {
-                    DbObject classObj = classMapping[theClass.NameHash];
+                    string className = classObj.GetValue("name", "");
 
-                    if (mapping.ContainsKey(classObj.GetValue("name", "")))
+                    if (mapping.ContainsKey(className))
                     {
-                        mapping.Remove(classObj.GetValue("name", ""));
-                        m_fieldMappings.Remove(classObj.GetValue("name", ""));
+                        mapping.Remove(className);
+                        m_fieldMappings.Remove(className);
                     }
 
                     if (!classObj.HasValue("typeInfoGuid"))
@@ -1622,7 +1821,7 @@ namespace Frosty.Core.Sdk
 
                     EbxClass ebxClass = new EbxClass
                     {
-                        Name = classObj.GetValue("name", ""),
+                        Name = className,
                         FieldCount = theClass.FieldCount,
                         Alignment = theClass.Alignment,
                         Size = theClass.Size,
@@ -1637,48 +1836,67 @@ namespace Frosty.Core.Sdk
                     DbObject newFieldObjs = DbObject.CreateList();
                     classObj.RemoveValue("fields");
 
+                    uint inheritedHash = (ProfilesLibrary.DataVersion == (int)ProfileVersion.PlantsVsZombiesBattleforNeighborville) ? 0xc4cfb854 : 0xb95a6ae7;
+
+                    Dictionary<uint, DbObject> dumpFields = new Dictionary<uint, DbObject>();
+                    foreach (DbObject fieldObj in fieldObjs)
+                    {
+                        if (!fieldObj.HasValue("index"))
+                        {
+                            continue;
+                        }
+
+                        uint nameHash = (uint)fieldObj.GetValue<int>("nameHash");
+                        if (nameHash == inheritedHash)
+                        {
+                            continue;
+                        }
+                        if (!dumpFields.ContainsKey(nameHash))
+                        {
+                            dumpFields.Add(nameHash, fieldObj);
+                        }
+                    }
+
+                    foreach (DbObject fieldObj in dumpFields.Values)
+                    {
+                        int dumpFlags = fieldObj.GetValue<int>("flags");
+                        if (((dumpFlags >> 4) & 0x1F) == 0)
+                        {
+                            int dumpType = fieldObj.GetValue<int>("type");
+                            fieldObj.SetValue("flags", (dumpType << 4) | (dumpFlags & 0xF));
+                        }
+                        newFieldObjs.Add(fieldObj);
+                    }
+
                     for (int j = 0; j < theClass.FieldCount; j++)
                     {
                         EbxField field = std.GetField(theClass.FieldIndex + j).Value;
-                        field.Name = hashToFieldMapping.ContainsKey(field.NameHash) ? hashToFieldMapping[field.NameHash] : "";
-                        bool isFound = false;
+                        field.Name = hashToFieldMapping.TryGetValue(field.NameHash, out string mappedName) ? mappedName : "";
 
-                        foreach (DbObject fieldObj in fieldObjs)
+                        if (dumpFields.TryGetValue(field.NameHash, out DbObject fieldObj))
                         {
-                            uint nameHash = (uint)fieldObj.GetValue<int>("nameHash");
-                            if (nameHash == field.NameHash)
+                            fieldObj.SetValue("type", field.Type);
+                            fieldObj.SetValue("flags", field.Type);
+                            fieldObj.SetValue("offset", field.DataOffset);
+                            fieldObj.SetValue("value", (int)field.DataOffset);
+                            if (field.DebugType == EbxFieldType.Array && field.ClassRef != ushort.MaxValue)
                             {
-                                fieldObj.SetValue("type", field.Type);
-                                fieldObj.SetValue("offset", field.DataOffset);
-                                fieldObj.SetValue("value", (int)field.DataOffset);
-                                if (field.DebugType == EbxFieldType.Array && field.ClassRef != ushort.MaxValue)
-                                {
-                                    Guid arrayGuid = std.GetGuid(theClass.Index + (short)field.ClassRef).Value;
-                                    fieldObj.SetValue("guid", arrayGuid);
-                                }
-                                newFieldObjs.Add(fieldObj);
-                                isFound = true;
-                                break;
+                                Guid arrayGuid = std.GetGuid(theClass.Index + (short)field.ClassRef).Value;
+                                fieldObj.SetValue("guid", arrayGuid);
                             }
                         }
-
-                        if (!isFound)
+                        else if (field.NameHash != inheritedHash)
                         {
-                            // not the inherited variable
-                            uint inheritedHash = (ProfilesLibrary.DataVersion == (int)ProfileVersion.PlantsVsZombiesBattleforNeighborville) ? 0xc4cfb854 : 0xb95a6ae7;
-                            if (field.NameHash != inheritedHash)
-                            {
-                                field.Name = (field.Name != "") ? field.Name : "Unknown_" + field.NameHash.ToString("x8");
+                            field.Name = (field.Name != "") ? field.Name : "Unknown_" + field.NameHash.ToString("x8");
 
-                                DbObject newField = DbObject.CreateObject();
-                                newField.SetValue("name", field.Name);
-                                newField.SetValue("nameHash", (int)field.NameHash);
-                                newField.SetValue("type", field.Type);
-                                newField.SetValue("flags", (ushort)0);
-                                newField.SetValue("offset", field.DataOffset);
-                                newField.SetValue("value", (int)field.DataOffset);
-                                newFieldObjs.Add(newField);
-                            }
+                            DbObject newField = DbObject.CreateObject();
+                            newField.SetValue("name", field.Name);
+                            newField.SetValue("nameHash", (int)field.NameHash);
+                            newField.SetValue("type", field.Type);
+                            newField.SetValue("flags", (ushort)0);
+                            newField.SetValue("offset", field.DataOffset);
+                            newField.SetValue("value", (int)field.DataOffset);
+                            newFieldObjs.Add(newField);
                         }
 
                         m_fieldMappings[ebxClass.Name].Add(field);
@@ -1694,34 +1912,33 @@ namespace Frosty.Core.Sdk
             string parent = pobj.GetValue<string>("parent");
             if (parent != "")
             {
-                Tuple<EbxClass, DbObject> p = m_values.Find((Tuple<EbxClass, DbObject> a) => { return a.Item1.Name == parent; });
-                offset = ProcessClass(p.Item1, p.Item2, m_fieldMappings[p.Item1.Name], outList, ref offset, ref fieldIndex);
-
-                if (p.Item1.Name == "DataContainer" && pclass.Name != "Asset")
+                if (m_valuesByNameMap != null && m_valuesByNameMap.TryGetValue(parent, out Tuple<EbxClass, DbObject> p) && p.Item2 != null)
                 {
-                    pobj.SetValue("isData", true);
+                    offset = ProcessClass(p.Item1, p.Item2, m_fieldMappings[p.Item1.Name], outList, ref offset, ref fieldIndex);
+
+                    if (p.Item1.Name == "DataContainer" && pclass.Name != "Asset")
+                    {
+                        pobj.SetValue("isData", true);
+                    }
                 }
             }
 
+            // O(1) HashSet check replaces original List.Contains scan (now my life cant be wasted away at creating sdk)
             if (m_processedClasses.Contains(pclass))
             {
-                foreach (DbObject t in outList)
+                if (m_outListByName.TryGetValue(pclass.Name, out DbObject t))
                 {
-                    if (t.GetValue<string>("name") == pclass.Name)
-                    {
-                        fieldIndex += t.GetValue<DbObject>("fields").Count;
-                        return t.GetValue<int>("size");
-                    }
+                    fieldIndex += t.GetValue<DbObject>("fields").Count;
+                    return t.GetValue<int>("size");
                 }
                 return 0;
             }
             m_processedClasses.Add(pclass);
 
-            int index = m_classMetaList.FindIndex((object o) => { return ((DbObject)o).GetValue<string>("name") == pclass.Name; });
             DbObject classMeta = null;
-            if (index != -1)
+            if (m_classMetaMap != null)
             {
-                classMeta = m_classMetaList[index] as DbObject;
+                m_classMetaMap.TryGetValue(pclass.Name, out classMeta);
             }
 
             DbObject origFieldList = pobj.GetValue<DbObject>("fields");
@@ -1753,6 +1970,30 @@ namespace Frosty.Core.Sdk
                 }
                 newFields.Sort((EbxField a, EbxField b) => a.DataOffset.CompareTo(b.DataOffset));
 
+                Dictionary<string, DbObject> origFieldByName = new Dictionary<string, DbObject>(StringComparer.Ordinal);
+                foreach (DbObject a in origFieldList)
+                {
+                    string aName = a.GetValue<string>("name");
+                    if (aName != null && !origFieldByName.ContainsKey(aName))
+                    {
+                        origFieldByName[aName] = a;
+                    }
+                }
+
+                Dictionary<string, DbObject> metaFieldByName = null;
+                if (classMeta != null)
+                {
+                    metaFieldByName = new Dictionary<string, DbObject>(StringComparer.Ordinal);
+                    foreach (DbObject mf in classMeta.GetValue<DbObject>("fields"))
+                    {
+                        string mfName = mf.GetValue<string>("name");
+                        if (mfName != null && !metaFieldByName.ContainsKey(mfName))
+                        {
+                            metaFieldByName[mfName] = mf;
+                        }
+                    }
+                }
+
                 foreach (EbxField field in newFields)
                 {
                     if (field.DebugType == EbxFieldType.Inherited)
@@ -1760,29 +2001,17 @@ namespace Frosty.Core.Sdk
                         continue;
                     }
 
-                    DbObject origField = null;
-                    foreach (DbObject a in origFieldList)
-                    {
-                        if (a.GetValue<string>("name") == field.Name)
-                        {
-                            origField = a;
-                            break;
-                        }
-                    }
-                    if (origField == null)
+                    if (!origFieldByName.TryGetValue(field.Name, out DbObject origField))
                     {
                         Console.WriteLine(pclass.Name + "." + field.Name + " missing from executable definition");
                         continue;
                     }
 
                     DbObject fieldObj = new DbObject();
-                    if (classMeta != null)
+                    if (metaFieldByName != null)
                     {
-                        DbObject fieldMetaList = classMeta.GetValue<DbObject>("fields");
-                        index = fieldMetaList.FindIndex((object o) => ((DbObject)o).GetValue<string>("name") == field.Name);
-                        if (index != -1)
+                        if (metaFieldByName.TryGetValue(field.Name, out DbObject fieldMeta))
                         {
-                            DbObject fieldMeta = fieldMetaList[index] as DbObject;
                             fieldObj.AddValue("meta", fieldMeta);
                         }
                     }
@@ -1801,64 +2030,82 @@ namespace Frosty.Core.Sdk
                     if (field.DebugType == EbxFieldType.Pointer || field.DebugType == EbxFieldType.Struct || field.DebugType == EbxFieldType.Enum || field.DebugType == EbxFieldType.Delegate || field.DebugType == EbxFieldType.Function)
                     {
                         string baseTypeName = origField.GetValue<string>("baseType");
-                        int idx = m_values.FindIndex((Tuple<EbxClass, DbObject> a) => a.Item1.Name == baseTypeName && !a.Item2.HasValue("basic"));
-                        if (idx != -1)
+
+                        // Dictionary lookup instead of FindIndex
+                        if (m_nonBasicValueMap != null && !string.IsNullOrEmpty(baseTypeName) && m_nonBasicValueMap.TryGetValue(baseTypeName, out var matchedValue))
                         {
                             if (field.DebugType == EbxFieldType.Delegate || field.DebugType == EbxFieldType.Function)
                             {
-                                fieldObj.AddValue("baseType", string.Format("Reflection.{0}", m_values[idx].Item1.Name));
+                                fieldObj.AddValue("baseType", $"Reflection.{matchedValue.Item1.Name}");
                             }
                             else
                             {
-                                fieldObj.AddValue("baseType", m_values[idx].Item1.Name);
+                                fieldObj.AddValue("baseType", matchedValue.Item1.Name);
                             }
+
+                            if (field.DebugType == EbxFieldType.Struct)
+                            {
+                                foreach (EbxField ebxField in fields)
+                                {
+                                    if (ebxField.DebugType == EbxFieldType.Inherited && ebxField.DataOffset == 16)
+                                    {
+                                        pobj.SetValue("forceAlign", true);
+                                        Console.WriteLine(pobj.GetValue<string>("name"));
+                                    }
+                                    if (ebxField.Name.Equals(field.Name))
+                                    {
+                                        if (field.Type != ebxField.Type)
+                                        {
+                                            fieldObj.SetValue("flags", (int)ebxField.Type);
+                                        }
+                                        break;
+                                    }
+                                }
+
+                                if (matchedValue.Item1.Alignment != 0)
+                                {
+                                    while (offset % matchedValue.Item1.Alignment != 0)
+                                    {
+                                        offset++;
+                                    }
+                                }
+                            }
+                        }
+                        else if (field.DebugType == EbxFieldType.Pointer)
+                        {
+                            // Pointer fields are always PointerRef
+                            Console.WriteLine($"SDK: {pclass.Name}.{field.Name}: pointer baseType '{baseTypeName}' not resolved; emitting as PointerRef");
+                        }
+                        else if (string.IsNullOrEmpty(baseTypeName))
+                        {
+                            // Field has a complex type but no resolvable referenced class.
+                            Console.WriteLine($"SDK: skipping {field.DebugType} field '{pclass.Name}.{field.Name}' (no baseType resolved)");
+                            continue;
                         }
                         else if (field.DebugType == EbxFieldType.Enum)
                         {
-                            throw new InvalidDataException();
+                            throw new InvalidDataException($"Enum baseType not found: {baseTypeName} ({pclass.Name}.{field.Name})");
                         }
-
-                        if (field.DebugType == EbxFieldType.Struct)
+                        else
                         {
-                            foreach (EbxField ebxField in fields)
-                            {
-                                if (ebxField.DebugType == EbxFieldType.Inherited && ebxField.DataOffset == 16)
-                                {
-                                    pobj.SetValue("forceAlign", true);
-                                    Console.WriteLine(pobj.GetValue<string>("name"));
-                                }
-                                if (ebxField.Name.Equals(field.Name))
-                                {
-                                    if (field.Type != ebxField.Type)
-                                    {
-                                        fieldObj.SetValue("flags", (int)ebxField.Type);
-                                    }
-                                    break;
-                                }
-                            }
-                            if (m_values[idx].Item1.Alignment != 0)
-                            {
-                            while (offset % m_values[idx].Item1.Alignment != 0)
-                            {
-                                offset++;
-                            }
+                            Console.WriteLine($"SDK: skipping {field.DebugType} field '{pclass.Name}.{field.Name}' (unresolved baseType '{baseTypeName}')");
+                            continue;
                         }
-                    }
                     }
                     else if (field.DebugType == EbxFieldType.Array)
                     {
                         string baseTypeName = origField.GetValue<string>("baseType");
-                        int idx = m_values.FindIndex((Tuple<EbxClass, DbObject> a) => a.Item1.Name == baseTypeName && !a.Item2.HasValue("basic"));
 
-                        if (idx != -1)
+                        if (m_nonBasicValueMap != null && !string.IsNullOrEmpty(baseTypeName) && m_nonBasicValueMap.TryGetValue(baseTypeName, out var matchedValue))
                         {
-                            fieldObj.AddValue("baseType", m_values[idx].Item1.Name);
-                            fieldObj.AddValue("arrayFlags", (int)m_values[idx].Item1.Type);
+                            fieldObj.AddValue("baseType", matchedValue.Item1.Name);
+                            fieldObj.AddValue("arrayFlags", (int)matchedValue.Item1.Type);
                         }
                         else
                         {
                             EbxFieldType arrayType = (EbxFieldType)((origField.GetValue<int>("arrayFlags") >> 4) & 0x1F);
-                            if (arrayType == EbxFieldType.Pointer || arrayType == EbxFieldType.Struct || arrayType == EbxFieldType.Enum)
+                            if ((arrayType == EbxFieldType.Pointer || arrayType == EbxFieldType.Struct || arrayType == EbxFieldType.Enum)
+                                && !string.IsNullOrEmpty(baseTypeName))
                             {
                                 fieldObj.AddValue("baseType", baseTypeName);
                             }
@@ -1906,54 +2153,66 @@ namespace Frosty.Core.Sdk
                     {
                         case EbxFieldType.Struct:
                             {
-                                Tuple<EbxClass, DbObject> s = m_values.Find((Tuple<EbxClass, DbObject> a) => a.Item1.Name == fieldObj.GetValue<string>("baseType"));
+                                string bName = fieldObj.GetValue<string>("baseType");
+                                if (m_valuesByNameMap != null && m_valuesByNameMap.TryGetValue(bName, out var s))
+                                {
+                                    int structOffset = 0;
+                                    int structFieldIndex = 0;
 
-                                int structOffset = 0;
-                                int structFieldIndex = 0;
-
-                                offset += ProcessClass(s.Item1, s.Item2, m_fieldMappings[s.Item1.Name], outList, ref structOffset, ref structFieldIndex);
+                                    offset += ProcessClass(s.Item1, s.Item2, m_fieldMappings[s.Item1.Name], outList, ref structOffset, ref structFieldIndex);
+                                }
                             }
                             break;
-                        case EbxFieldType.Pointer: offset += 4; break;
-                        case EbxFieldType.Array: offset += 4; break;
-                        case EbxFieldType.String: offset += 32; break;
-                        case EbxFieldType.CString: offset += 4; break;
-                        case EbxFieldType.Enum: offset += 4; break;
-                        case EbxFieldType.FileRef: offset += 8; break;
-                        case EbxFieldType.Boolean: offset += 1; break;
-                        case EbxFieldType.Int8: offset += 1; break;
-                        case EbxFieldType.UInt8: offset += 1; break;
-                        case EbxFieldType.Int16: offset += 2; break;
-                        case EbxFieldType.UInt16: offset += 2; break;
-                        case EbxFieldType.Int32: offset += 4; break;
-                        case EbxFieldType.UInt32: offset += 4; break;
-                        case EbxFieldType.Int64: offset += 8; break;
-                        case EbxFieldType.UInt64: offset += 8; break;
-                        case EbxFieldType.Float32: offset += 4; break;
-                        case EbxFieldType.Float64: offset += 8; break;
-                        case EbxFieldType.Guid: offset += 16; break;
-                        case EbxFieldType.Sha1: offset += 20; break;
-                        case EbxFieldType.ResourceRef: offset += 8; break;
-                        case EbxFieldType.TypeRef: offset += 8; break;
-                        case EbxFieldType.BoxedValueRef: offset += 16; break;
+                        case EbxFieldType.Pointer:
+                        case EbxFieldType.Array:
+                        case EbxFieldType.CString:
+                        case EbxFieldType.Enum:
+                        case EbxFieldType.Int32:
+                        case EbxFieldType.UInt32:
+                        case EbxFieldType.Float32:
+                            offset += 4;
+                            break;
+                        case EbxFieldType.String:
+                            offset += 32;
+                            break;
+                        case EbxFieldType.FileRef:
+                        case EbxFieldType.Int64:
+                        case EbxFieldType.UInt64:
+                        case EbxFieldType.Float64:
+                        case EbxFieldType.ResourceRef:
+                        case EbxFieldType.TypeRef:
+                            offset += 8;
+                            break;
+                        case EbxFieldType.Boolean:
+                        case EbxFieldType.Int8:
+                        case EbxFieldType.UInt8:
+                            offset += 1;
+                            break;
+                        case EbxFieldType.Int16:
+                        case EbxFieldType.UInt16:
+                            offset += 2;
+                            break;
+                        case EbxFieldType.Guid:
+                        case EbxFieldType.BoxedValueRef:
+                            offset += 16;
+                            break;
+                        case EbxFieldType.Sha1:
+                            offset += 20;
+                            break;
                     }
                 }
             }
             if (pclass.Alignment != 0)
             {
-            while (offset % pclass.Alignment != 0)
-            {
-                offset++;
-            }
+                while (offset % pclass.Alignment != 0)
+                {
+                    offset++;
+                }
             }
 
             pobj.SetValue("flags", (int)pclass.Type);
 
-            pobj.SetValue("size", offset);
-            if (ProfilesLibrary.IsLoaded(ProfileVersion.Anthem))
-            {
-                pobj.SetValue("size", pclass.Size);
-            }
+            pobj.SetValue("size", pclass.Size != 0 ? pclass.Size : offset);
 
             if (pclass.DebugType == EbxFieldType.Enum)
             {
@@ -1980,13 +2239,17 @@ namespace Frosty.Core.Sdk
                 }
             }
 
+            if (!m_outListByName.ContainsKey(pclass.Name))
+            {
+                m_outListByName[pclass.Name] = pobj;
+            }
             outList.Add(pobj);
             return offset;
         }
 
         private DbObject DumpClasses(SdkUpdateTask task)
         {
-            MemoryReader reader = null;
+            MemoryReader reader;
             string Namespace = "Frosty.Core.Sdk.ClassesSdkCreator+";
 
             // Anthem
@@ -2016,6 +2279,7 @@ namespace Frosty.Core.Sdk
             m_classInfos.Clear();
             m_alreadyProcessedClasses.Clear();
             m_processedClasses.Clear();
+            m_outListByName.Clear();
             m_fieldMappings?.Clear();
 
             NextOffset = origOffset;
@@ -2073,7 +2337,7 @@ namespace Frosty.Core.Sdk
             int alignment = classInfo.TypeInfo.Alignment;
             int size = (int)classInfo.TypeInfo.Size;
 
-            ClassInfo arrayType = (m_offsetClassInfoMappings.ContainsKey(classInfo.TypeInfo.ArrayTypeOffset)) ? m_offsetClassInfoMappings[classInfo.TypeInfo.ArrayTypeOffset] : null;
+            m_offsetClassInfoMappings.TryGetValue(classInfo.TypeInfo.ArrayTypeOffset, out ClassInfo arrayType);
 
             DbObject classObj = DbObject.CreateObject();
             classObj.SetValue("name", classInfo.TypeInfo.Name);
@@ -2106,8 +2370,8 @@ namespace Frosty.Core.Sdk
                 return;
             }
 
-            ClassInfo parent = (m_offsetClassInfoMappings.ContainsKey(classInfo.ParentClass)) ? m_offsetClassInfoMappings[classInfo.ParentClass] : null;
-            ClassInfo arrayType = (m_offsetClassInfoMappings.ContainsKey(classInfo.TypeInfo.ArrayTypeOffset)) ? m_offsetClassInfoMappings[classInfo.TypeInfo.ArrayTypeOffset] : null;
+            m_offsetClassInfoMappings.TryGetValue(classInfo.ParentClass, out ClassInfo parent);
+            m_offsetClassInfoMappings.TryGetValue(classInfo.TypeInfo.ArrayTypeOffset, out ClassInfo arrayType);
             if (parent != null)
             {
                 CreateClassObject(parent, ref classList);
@@ -2154,7 +2418,8 @@ namespace Frosty.Core.Sdk
                     fieldObj.AddValue("flags", (int)fieldType.TypeInfo.Flags);
                     fieldObj.AddValue("offset", (int)field.Offset);
                     fieldObj.AddValue("index", (int)field.Index);
-                    if (fieldType.TypeInfo.Type == 3 || fieldType.TypeInfo.Type == 2 || fieldType.TypeInfo.Type == 8)
+                    if (fieldType.TypeInfo.Type == 3 || fieldType.TypeInfo.Type == 2 || fieldType.TypeInfo.Type == 8
+                        || fieldType.TypeInfo.Type == 0x1c || fieldType.TypeInfo.Type == 0x18 || fieldType.TypeInfo.Type == 0x1b)
                     {
                         fieldObj.AddValue("baseType", fieldType.TypeInfo.Name);
                     }
@@ -2185,7 +2450,7 @@ namespace Frosty.Core.Sdk
             int alignment = classInfo.TypeInfo.Alignment;
             int size = (int)classInfo.TypeInfo.Size;
 
-            ClassInfo arrayType = (m_offsetClassInfoMappings.ContainsKey(classInfo.TypeInfo.ArrayTypeOffset)) ? m_offsetClassInfoMappings[classInfo.TypeInfo.ArrayTypeOffset] : null;
+            m_offsetClassInfoMappings.TryGetValue(classInfo.TypeInfo.ArrayTypeOffset, out ClassInfo arrayType);
 
             DbObject classObj = DbObject.CreateObject();
             classObj.SetValue("name", classInfo.TypeInfo.Name);
@@ -2209,20 +2474,29 @@ namespace Frosty.Core.Sdk
             classInfo.TypeInfo.Modify(classObj, m_offsetClassInfoMappings);
 
             DbObject parameterList = new DbObject(false);
-            foreach (ParameterInfo parameter in classInfo.TypeInfo.Parameters)
+
+            // delegates only have a signature string in memory, not an array of ParameterInfo arguments.
+            // Skip parameter array processing if profile is pvz bnf
+            if (!ProfilesLibrary.IsLoaded(ProfileVersion.PlantsVsZombiesBattleforNeighborville))
             {
-                DbObject parameterObj = new DbObject();
+                foreach (ParameterInfo parameter in classInfo.TypeInfo.Parameters)
+                {
+                    DbObject parameterObj = new DbObject();
 
-                ClassInfo parameterType = m_offsetClassInfoMappings[parameter.TypeOffset];
-                parameterObj.AddValue("name", parameter.Name);
-                parameterObj.AddValue("type", parameterType.TypeInfo.Type);
-                parameterObj.AddValue("flags", (int)parameterType.TypeInfo.Flags);
-                parameterObj.AddValue("baseType", parameterType.TypeInfo.Name);
-                parameterObj.AddValue("defaultValue", parameter.DefaultValue);
-                parameterObj.AddValue("parameterType", parameter.Type);
+                    // Safely retrieve the parameter type mapping
+                    if (m_offsetClassInfoMappings.TryGetValue(parameter.TypeOffset, out ClassInfo parameterType))
+                    {
+                        parameterObj.AddValue("name", parameter.Name);
+                        parameterObj.AddValue("type", parameterType.TypeInfo.Type);
+                        parameterObj.AddValue("flags", (int)parameterType.TypeInfo.Flags);
+                        parameterObj.AddValue("baseType", parameterType.TypeInfo.Name);
+                        parameterObj.AddValue("defaultValue", parameter.DefaultValue);
+                        parameterObj.AddValue("parameterType", parameter.Type);
 
-                parameter.Modify(parameterObj);
-                parameterList.Add(parameterObj);
+                        parameter.Modify(parameterObj);
+                        parameterList.Add(parameterObj);
+                    }
+                }
             }
 
             classObj.AddValue("parameters", parameterList);
