@@ -1,6 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -11,9 +9,8 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>FrostyEditor</RootNamespace>
     <AssemblyName>FrostyEditor</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <FileAlignment>512</FileAlignment>
-    <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WarningLevel>4</WarningLevel>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <PublishUrl>publish\</PublishUrl>
@@ -31,6 +28,11 @@
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AssemblyVersion>1.0.6.3</AssemblyVersion>
+    <FileVersion>1.0.6.3</FileVersion>
+    <UseWPF>True</UseWPF>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release - Final|x64' ">
     <OutputPath>bin\Release\Final\</OutputPath>
@@ -93,107 +95,25 @@
   <PropertyGroup>
     <AssemblyOriginatorKeyFile>FrostyEditor.pfx</AssemblyOriginatorKeyFile>
   </PropertyGroup>
+    
+  <ItemDefinitionGroup>
+    <!-- Enable `GeneratePathProperty` for all `PackageReference`s. -->
+    <PackageReference ExcludeAssets="runtime" GeneratePathProperty="true" />
+  </ItemDefinitionGroup>
+    
   <ItemGroup>
-    <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>ThirdParty\Newtonsoft.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="PresentationFramework.Aero2" />
-    <Reference Include="System" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Xml" />
-    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
-    <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
-    <PackageReference Include="System.Net.Http" Version="4.3.4" />
-    <Reference Include="System.Xaml" RequiredTargetFramework="4.0" />
-    <Reference Include="WindowsBase" />
-    <Reference Include="PresentationCore" />
-    <Reference Include="PresentationFramework" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
+    
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <ItemGroup>
+      <ThirdPartyFolder Include="$(SolutionDir)FrostyEditor\$(OutDir)ThirdParty\" />
+    </ItemGroup>
+      
+    <Copy SourceFiles="$(PkgNewtonsoft_Json)\lib\net6.0\Newtonsoft.Json.dll" DestinationFolder="@(ThirdPartyFolder)" />
+  </Target>
+    
   <ItemGroup>
-    <ApplicationDefinition Include="App.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </ApplicationDefinition>
-    <Compile Include="Commands\ExportModMenuItemCommand.cs" />
-    <Compile Include="Extensions\TextExtension.cs" />
-    <Compile Include="DiscordRPC.cs" />
-    <Compile Include="FileUnblocker.cs" />
-    <Compile Include="Windows\AboutWindow.xaml.cs">
-      <DependentUpon>AboutWindow.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Windows\MainWindow.xaml.cs">
-      <DependentUpon>MainWindow.xaml</DependentUpon>
-    </Compile>
-    <Page Include="Themes\Generic.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Windows\AboutWindow.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Windows\ModSettingsWindow.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="Windows\PatchSummaryWindow.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Windows\PrelaunchWindow2.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Windows\SplashWindow.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Compile Include="App.xaml.cs">
-      <DependentUpon>App.xaml</DependentUpon>
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Windows\ModSettingsWindow.xaml.cs">
-      <DependentUpon>ModSettingsWindow.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Windows\PatchSummaryWindow.xaml.cs">
-      <DependentUpon>PatchSummaryWindow.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Windows\PrelaunchWindow2.xaml.cs">
-      <DependentUpon>PrelaunchWindow2.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Windows\SplashWindow.xaml.cs">
-      <DependentUpon>SplashWindow.xaml</DependentUpon>
-    </Compile>
-    <Page Include="Windows\MainWindow.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Properties\AssemblyInfo.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Properties\Resources.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>Resources.resx</DependentUpon>
-    </Compile>
-    <Compile Include="Properties\Settings.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Settings.settings</DependentUpon>
-      <DesignTimeSharedInput>True</DesignTimeSharedInput>
-    </Compile>
-    <EmbeddedResource Include="Properties\Resources.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <None Include=".editorconfig" />
     <None Include="Resources\FifaKitPreviewStance.dat" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Shaders\character_jersey_shader.bin" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Shaders\Grid.bin" CopyToOutputDirectory="PreserveNewest" />
@@ -213,10 +133,7 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\FrostyHash\FrostyHash.vcxproj">
-      <Project>{d1a29bf8-2e2e-47be-845f-a6dd66d175ba}</Project>
-      <Name>FrostyHash</Name>
-    </ProjectReference>
+    <ProjectReference Include="..\FrostyHash\FrostyHash.csproj" />
     <ProjectReference Include="..\FrostyModSupport\FrostyModSupport.csproj">
       <Project>{e703b059-36f3-4ebf-8f86-32561bc47dcb}</Project>
       <Name>FrostyModSupport</Name>
@@ -288,22 +205,7 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Images\Recent.png" />
-    <Content Include="Resources\Meshes\Flag.bin">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Meshes\Sprite.bin">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Meshes\TranslateGizmo.bin">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Textures\DefaultLayer.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="Resources\Textures\DefaultLightProbe.dds" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Resources\Textures\DefaultSprite.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="Resources\Textures\Grid.DDS" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Shaders\character_jersey_shader.hlsl" />
     <None Include="Shaders\character_jersey_shader.xml" CopyToOutputDirectory="PreserveNewest" />
@@ -318,62 +220,9 @@
       <SubType>Designer</SubType>
     </None>
     <Resource Include="Shaders\ShaderTemplate.txt" />
-    <Content Include="Resources\Textures\Sprites\Conversation.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Textures\Sprites\DirectionalLight.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Textures\Sprites\GameObject.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Textures\Sprites\Location.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Textures\Sprites\PointLight.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Textures\Sprites\RectLight.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Textures\Sprites\SpotLight.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Textures\TranslateGizmo.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\Textures\TranslateGizmoSelected.dds">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Shaders\GizmoShader.bin">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Shaders\GizmoShader.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Shaders\LevelShader.bin">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Shaders\LevelShader.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Shaders\SpriteShader.bin">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Shaders\SpriteShader.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Shaders\TerrainShader.bin">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Shaders\TerrainShader.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="ThirdParty\GFSDK_SSAO_D3D11.win64.dll" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdParty\GFSDK_ShadowLib_DX11.win64.dll" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdParty\GFSDK_Txaa.win64.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\NAudio.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\NAudio.WaveFormRenderer.dll" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdParty\NvTxaaUtil.x64.dll" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdParty\renderdoc.dll" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdParty\swresample-3.dll" />
@@ -391,75 +240,14 @@
     <Content Include="ThirdParty\libfbxsdk.dll" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdParty\luacmp.dll" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="ThirdParty\luacmp.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\Newtonsoft.Json.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\SharpDX.Desktop.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\SharpDX.Direct2D1.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\SharpDX.Direct3D11.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\SharpDX.D3DCompiler.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\SharpDX.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\SharpDX.DXGI.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\SharpDX.Mathematics.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="ThirdParty\SharpDX.XAudio2.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-  <ItemGroup>
-    <BootstrapperPackage Include=".NETFramework,Version=v4.6.1">
-      <Visible>False</Visible>
-      <ProductName>Microsoft .NET Framework 4.6.1 %28x86 and x64%29</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="SharpDX" Version="4.2.0">
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="SharpDX.D3DCompiler" Version="4.2.0">
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="SharpDX.Desktop" Version="4.2.0">
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="SharpDX.Direct2D1" Version="4.2.0">
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="SharpDX.Direct3D11" Version="4.2.0">
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="SharpDX.Direct3D9" Version="4.2.0">
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="SharpDX.DXGI" Version="4.2.0">
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="SharpDX.Mathematics" Version="4.2.0">
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="SharpDX.XAudio2" Version="4.2.0">
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="Shaders\GizmoShader.hlsl">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </ClCompile>
-    <ClCompile Include="Shaders\LevelShader.hlsl">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </ClCompile>
-    <ClCompile Include="Shaders\SpriteShader.hlsl">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </ClCompile>
-    <ClCompile Include="Shaders\TerrainShader.hlsl">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </ClCompile>
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>
     </PostBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PreBuildEvent>
+    </PreBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

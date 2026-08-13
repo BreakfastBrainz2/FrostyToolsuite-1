@@ -2780,7 +2780,10 @@ namespace Frosty.ModSupport
             using (TextWriter writer = new StreamWriter(new FileStream(AppDomain.CurrentDomain.BaseDirectory + "\\run.bat", FileMode.Create)))
             {
                 foreach (SymLinkStruct arg in cmdArgs)
-                    writer.WriteLine("mklink" + ((arg.isFolder) ? "/D " : " ") + "\"" + arg.dest + "\" \"" + arg.src + "\"");
+                {
+                    string mklinkCmd = arg.isFolder ? "mklink /D " : "mklink ";
+                    writer.WriteLine(mklinkCmd + "\"" + arg.dest + "\" \"" + arg.src + "\"");
+                }
             }
 
             // create data and update symbolic links
