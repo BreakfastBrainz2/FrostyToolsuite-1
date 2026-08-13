@@ -16,10 +16,6 @@
       <BuildType Solution="Release|*" Project="Release - Final" />
       <Platform Project="x64" />
     </Project>
-    <Project Path="Plugins/BiowareLocalizationPlugin/BiowareLocalizationPlugin.csproj">
-      <BuildType Solution="Release|*" Project="Release - Final" />
-      <Platform Project="x64" />
-    </Project>
     <Project Path="Plugins/BlankPlugin/BlankPlugin.csproj">
       <BuildType Solution="Release|*" Project="Release - Final" />
       <Platform Project="x64" />
@@ -52,10 +48,6 @@
     </Project>
     <Project Path="Plugins/CustomizationCreatorPlugin/CustomizationCreatorPlugin.csproj">
       <BuildType Solution="Release|*" Project="Release - Alpha" />
-      <Platform Project="x64" />
-    </Project>
-    <Project Path="Plugins/DelayLoadBundlePlugin/DelayLoadBundlePlugin.csproj">
-      <BuildType Solution="Release|*" Project="Release - Final" />
       <Platform Project="x64" />
     </Project>
     <Project Path="Plugins/DuplicationPlugin/DuplicationPlugin.csproj">
@@ -161,13 +153,11 @@
   </Project>
   <Project Path="FrostyEditor/FrostyEditor.csproj">
     <BuildDependency Project="Plugins/AtlasTexturePlugin/AtlasTexturePlugin.csproj" />
-    <BuildDependency Project="Plugins/BiowareLocalizationPlugin/BiowareLocalizationPlugin.csproj" />
     <BuildDependency Project="Plugins/BlankPlugin/BlankPlugin.csproj" />
     <BuildDependency Project="Plugins/BundleEditorPlugin/BundleEditorPlugin.csproj" />
     <BuildDependency Project="Plugins/ChunkResExplorerPlugin/ChunkResEditorPlugin.csproj" />
     <BuildDependency Project="Plugins/ConnectionPlugin/ConnectionPlugin.csproj" />
     <BuildDependency Project="Plugins/ConversationPlugin/ConversationPlugin.csproj" />
-    <BuildDependency Project="Plugins/DelayLoadBundlePlugin/DelayLoadBundlePlugin.csproj" />
     <BuildDependency Project="Plugins/DuplicationPlugin/DuplicationPlugin.csproj" />
     <BuildDependency Project="Plugins/EbxToXmlPlugin/EbxToXmlPlugin.csproj" />
     <BuildDependency Project="Plugins/FsLocalizationPlugin/FsLocalizationPlugin.csproj" />
@@ -192,7 +182,6 @@
     <Platform Project="x64" />
   </Project>
   <Project Path="FrostyModManager/FrostyModManager.csproj">
-    <BuildDependency Project="Plugins/BiowareLocalizationPlugin/BiowareLocalizationPlugin.csproj" />
     <BuildDependency Project="Plugins/FsLocalizationPlugin/FsLocalizationPlugin.csproj" />
     <BuildDependency Project="Plugins/MeshSetPlugin/MeshSetPlugin.csproj" />
     <BuildType Solution="Release|*" Project="Release - Final" />
