@@ -461,6 +461,74 @@ namespace BundleEditPlugin
         }
     }
 
+    public class EnlightenDataExtension : AddToBundleExtension
+    {
+        public override string AssetType => "EnlightenDataAsset";
+        public override void AddToBundle(EbxAssetEntry entry, BundleEntry bentry)
+        {
+            base.AddToBundle(entry, bentry);
+
+            EbxAsset asset = App.AssetManager.GetEbx(entry);
+            dynamic obj = asset.RootObject;
+
+            ResAssetEntry resEntry = App.AssetManager.GetResEntry(obj.DatabaseResource);
+            resEntry.AddToBundle(App.AssetManager.GetBundleId(bentry));
+
+            entry.LinkAsset(resEntry);
+        }
+    }
+
+    public class RemoveEnlightenDataExtension : RemoveFromBundleExtension
+    {
+        public override string AssetType => "EnlightenDataAsset";
+        public override void RemoveFromBundle(EbxAssetEntry entry, BundleEntry bentry)
+        {
+            base.RemoveFromBundle(entry, bentry);
+
+            EbxAsset asset = App.AssetManager.GetEbx(entry);
+            dynamic obj = asset.RootObject;
+
+            ResAssetEntry resEntry = App.AssetManager.GetResEntry(obj.DatabaseResource);
+            resEntry.AddedBundles.Remove(App.AssetManager.GetBundleId(bentry));
+
+            entry.LinkAsset(resEntry);
+        }
+    }
+
+    public class StaticEnlightenDataExtension : AddToBundleExtension
+    {
+        public override string AssetType => "StaticEnlightenData";
+        public override void AddToBundle(EbxAssetEntry entry, BundleEntry bentry)
+        {
+            base.AddToBundle(entry, bentry);
+
+            EbxAsset asset = App.AssetManager.GetEbx(entry);
+            dynamic obj = asset.RootObject;
+
+            ResAssetEntry resEntry = App.AssetManager.GetResEntry(obj.DatabaseResource);
+            resEntry.AddToBundle(App.AssetManager.GetBundleId(bentry));
+
+            entry.LinkAsset(resEntry);
+        }
+    }
+
+    public class RemoveStaticEnlightenDataExtension : RemoveFromBundleExtension
+    {
+        public override string AssetType => "StaticEnlightenData";
+        public override void RemoveFromBundle(EbxAssetEntry entry, BundleEntry bentry)
+        {
+            base.RemoveFromBundle(entry, bentry);
+
+            EbxAsset asset = App.AssetManager.GetEbx(entry);
+            dynamic obj = asset.RootObject;
+
+            ResAssetEntry resEntry = App.AssetManager.GetResEntry(obj.DatabaseResource);
+            resEntry.AddedBundles.Remove(App.AssetManager.GetBundleId(bentry));
+
+            entry.LinkAsset(resEntry);
+        }
+    }
+
     public class AddToBundleExtension
     {
         public virtual string AssetType => null;
