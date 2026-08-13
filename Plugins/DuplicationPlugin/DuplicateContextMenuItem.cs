@@ -650,6 +650,7 @@ namespace DuplicationPlugin
 
         public override EbxAssetEntry DuplicateAsset(EbxAssetEntry entry, string newName, bool createNew, Type newType)
         {
+            // Duplicate the ebx
             EbxAssetEntry newEntry = base.DuplicateAsset(entry, newName, createNew, newType);
             EbxAsset newAsset = App.AssetManager.GetEbx(newEntry);
             dynamic newRoot = newAsset.RootObject;
@@ -662,6 +663,51 @@ namespace DuplicationPlugin
             newRoot.Resource = newResEntry.ResRid;
             newEntry.LinkAsset(newResEntry);
 
+            return newEntry;
+        }
+    }
+
+    public class EnlightenDataExtension : DuplicateAssetExtension
+    {
+        public override string AssetType => "EnlightenDataAsset";
+
+        public override EbxAssetEntry DuplicateAsset(EbxAssetEntry entry, string newName, bool createNew, Type newType)
+        {
+            // Duplicate the ebx
+            EbxAssetEntry newEntry = base.DuplicateAsset(entry, newName, createNew, newType);
+            EbxAsset newAsset = App.AssetManager.GetEbx(newEntry);
+            dynamic newRoot = newAsset.RootObject;
+
+            // Duplicate the res
+            ResAssetEntry resEntry = App.AssetManager.GetResEntry(newRoot.DatabaseResource);
+            ResAssetEntry newResEntry = DuplicateRes(resEntry, newEntry.Name, ResourceType.EnlightenDatabase);
+
+            // Update the ebx
+            newRoot.DatabaseResource = newResEntry.ResRid;
+            newEntry.LinkAsset(newResEntry);
+
+            return newEntry;
+        }
+    }
+
+    public class StaticEnlightenDataExtension : DuplicateAssetExtension
+    {
+        public override string AssetType => "StaticEnlightenData";
+
+        public override EbxAssetEntry DuplicateAsset(EbxAssetEntry entry, string newName, bool createNew, Type newType)
+        {
+            // Duplicate the ebx
+            EbxAssetEntry newEntry = base.DuplicateAsset(entry, newName, createNew, newType);
+            EbxAsset newAsset = App.AssetManager.GetEbx(newEntry);
+            dynamic newRoot = newAsset.RootObject;
+
+            // Duplicate the res
+            ResAssetEntry resEntry = App.AssetManager.GetResEntry(newRoot.DatabaseResource);
+            ResAssetEntry newResEntry = DuplicateRes(resEntry, newEntry.Name, ResourceType.EnlightenStaticDatabase);
+
+            // Update the ebx
+            newRoot.DatabaseResource = newResEntry.ResRid;
+            newEntry.LinkAsset(newResEntry);
             return newEntry;
         }
     }
