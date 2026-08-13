@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -348,7 +349,7 @@ namespace AssetBankPlugin
                         int idx = _loadedMeshData.Count;
                         _loadedMeshData.Add(newEntry);
                         LoadedMeshes.Add(new LoadedMeshViewModel(this) { InternalIndex = idx, Name = entry.Filename });
-                        m_screen.AddMesh(meshSet, materials, SharpDX.Matrix.Identity, perMeshSkel);
+                        m_screen.AddMesh(meshSet, materials, Matrix4x4.Identity, perMeshSkel);
                         _meshLoaded = true;
                         m_screen.RefreshPose();
                     }
@@ -398,16 +399,15 @@ namespace AssetBankPlugin
                     {
                         int parentIdx = (int)bone.ParentIndex;
 
-                        SharpDX.Matrix localPose = new SharpDX.Matrix(
+                        Matrix4x4 localPose = new Matrix4x4(
                             bone.Pose.right.x, bone.Pose.right.y, bone.Pose.right.z, 0f,
                             bone.Pose.up.x, bone.Pose.up.y, bone.Pose.up.z, 0f,
                             bone.Pose.forward.x, bone.Pose.forward.y, bone.Pose.forward.z, 0f,
                             bone.Pose.trans.x, bone.Pose.trans.y, bone.Pose.trans.z, 1f
                         );
 
-                        SharpDX.Matrix invLocal = localPose;
-                        invLocal.Invert();
-                        SharpDX.Matrix modelPose = skeleton.GetBone(parentIdx).ModelPose * invLocal;
+                        Matrix4x4.Invert(localPose, out Matrix4x4 invLocal);
+                        Matrix4x4 modelPose = skeleton.GetBone(parentIdx).ModelPose * invLocal;
 
                         skeleton.AddBone(new MeshRenderSkeleton.Bone
                         {
@@ -963,7 +963,7 @@ namespace AssetBankPlugin
                     if (i < LoadedMeshes.Count && LoadedMeshes[i].IsVisible)
                     {
                         var e = _loadedMeshData[i];
-                        m_screen.AddMesh(e.MeshSet, e.Materials, SharpDX.Matrix.Identity, e.PerMeshSkeleton);
+                        m_screen.AddMesh(e.MeshSet, e.Materials, Matrix4x4.Identity, e.PerMeshSkeleton);
                     }
                 }
                 _meshLoaded = _loadedMeshData.Count > 0;
