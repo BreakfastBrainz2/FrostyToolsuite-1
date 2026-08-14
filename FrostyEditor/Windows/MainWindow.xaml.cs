@@ -731,7 +731,11 @@ namespace FrostyEditor.Windows
 
         private void hyperlink_RequestNavigate(object sender, RequestNavigateEventArgs e)
         {
-            System.Diagnostics.Process.Start(e.Uri.ToString());
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = e.Uri.ToString(),
+                UseShellExecute = true
+            });
         }
 
         public void OpenEditor(string title, FrostyBaseEditor editor)
