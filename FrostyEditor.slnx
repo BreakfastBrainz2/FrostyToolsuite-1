@@ -19,6 +19,7 @@
     <Project Path="Plugins/BlankPlugin/BlankPlugin.csproj">
       <BuildType Solution="Release|*" Project="Release - Final" />
       <Platform Project="x64" />
+      <Build Project="false" />
     </Project>
     <Project Path="Plugins/BlueprintEditorPlugin/BlueprintEditorPlugin.csproj">
       <BuildType Solution="Release - Alpha|*" Project="Developer - Debug" />
