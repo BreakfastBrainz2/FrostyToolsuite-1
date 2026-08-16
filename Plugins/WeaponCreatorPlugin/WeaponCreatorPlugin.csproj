@@ -3,8 +3,8 @@
     <Configurations>Developer - Debug;Release - Alpha;Release - Beta;Release - Final</Configurations>
     <Platforms>x64</Platforms>
     <TargetFrameworks>net10.0-windows</TargetFrameworks>
-    <AssemblyTitle>BlankPlugin</AssemblyTitle>
-    <Product>BlankPlugin</Product>
+    <AssemblyTitle>WeaponCreatorPlugin</AssemblyTitle>
+    <Product>WeaponCreatorPlugin</Product>
     <Copyright>Copyright ©  2020</Copyright>
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -37,12 +37,12 @@
   </PropertyGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<ItemGroup>
-			<PluginFiles Include="$(TargetDir)$(ProjectName).*" />
-		</ItemGroup>
-
-		<Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(SolutionDir)FrostyEditor\$(OutDir)Plugins\" />
-	</Target>
+	 <ItemGroup>
+	 	 <PluginFiles Include="$(TargetDir)$(ProjectName).*" />
+	 </ItemGroup>
+     
+	 <Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(SolutionDir)FrostyEditor\$(OutDir)Plugins\" />
+  </Target>
 
   <ItemGroup>
     <ProjectReference Include="..\..\FrostyControls\FrostyControls.csproj" />
