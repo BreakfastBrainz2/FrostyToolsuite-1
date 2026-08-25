@@ -119,6 +119,10 @@
       <BuildType Solution="Release|*" Project="Release - Alpha" />
       <Platform Project="x64" />
     </Project>
+    <Project Path="Plugins/SkeletonImportFromXmlPlugin/SkeletonImportFromXmlPlugin.csproj">
+      <BuildType Solution="Release|*" Project="Release - Alpha" />
+      <Platform Project="x64" />
+    </Project>
     <Project Path="Plugins/SoundEditorPlugin/SoundEditorPlugin.csproj">
       <BuildType Solution="Release|*" Project="Release - Final" />
       <Platform Project="x64" />
