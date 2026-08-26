@@ -1,64 +1,108 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-	
   <PropertyGroup>
-	<OutputType>Library</OutputType>
-	<TargetFramework>net10.0-windows</TargetFramework>
-	<UseWPF>True</UseWPF>
-	<SignAssembly>false</SignAssembly>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <Configurations>Developer - Debug;Release - Alpha;Release - Beta;Release - Final</Configurations>
     <Platforms>x64</Platforms>
+    <ProjectGuid>{93FB4A0C-DF89-4169-80B5-C4E2277FF7A0}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>FrostySdk</RootNamespace>
     <AssemblyName>FrostySdk</AssemblyName>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
-	
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release - Final|x64' ">
     <OutputPath>bin\Release\Final\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <Optimize>true</Optimize>
     <DebugType>portable</DebugType>
     <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <UseVSHostingProcess>true</UseVSHostingProcess>
   </PropertyGroup>
-	
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Developer - Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\Developer\Debug\</OutputPath>
     <DefineConstants>TRACE;DEBUG;FROSTY_DEVELOPER</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DebugType>portable</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
-	
+  <PropertyGroup>
+    <SignAssembly>false</SignAssembly>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyOriginatorKeyFile>
+    </AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+  <PropertyGroup>
+    <UseWPF>True</UseWPF>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release - Alpha|x64'">
     <OutputPath>bin\Release\Alpha\</OutputPath>
     <DefineConstants>TRACE;FROSTY_ALPHA</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Optimize>true</Optimize>
     <DebugType>portable</DebugType>
-	<UseVSHostingProcess>false</UseVSHostingProcess>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
-	
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release - Beta|x64' ">
     <OutputPath>bin\x64\Release -Beta\</OutputPath>
     <DefineConstants>TRACE;FROSTY_BETA</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Optimize>true</Optimize>
     <DebugType>portable</DebugType>
-	<UseVSHostingProcess>false</UseVSHostingProcess>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
-
+    
+  <ItemDefinitionGroup>
+    <!-- Enable `GeneratePathProperty` for all `PackageReference`s. -->
+    <PackageReference ExcludeAssets="runtime" GeneratePathProperty="true" />
+  </ItemDefinitionGroup>
+    
   <ItemGroup>
-	<ProjectReference Include="..\FrostyHash\FrostyHash.csproj" />
+    <PackageReference Include="MessagePack" Version="3.1.8" />
+    <PackageReference Include="MessagePack.Annotations" Version="3.1.8" />
   </ItemGroup>
-	
+    
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <ItemGroup>
+      <EditorThirdPartyFolder Include="$(SolutionDir)FrostyEditor\$(OutDir)ThirdParty\" />
+      <ModManagerThirdPartyFolder Include="$(SolutionDir)FrostyModManager\$(OutDir)ThirdParty\" />
+    </ItemGroup>
+      
+    <!-- Editor -->
+    <Copy SourceFiles="$(PkgMessagePack)\lib\net9.0\MessagePack.dll" DestinationFolder="@(EditorThirdPartyFolder)" />
+    <Copy SourceFiles="$(PkgMessagePack_Annotations)\lib\netstandard2.0\MessagePack.Annotations.dll" DestinationFolder="@(EditorThirdPartyFolder)" />
+      
+    <!-- Mod Manager -->
+    <Copy SourceFiles="$(PkgMessagePack)\lib\net9.0\MessagePack.dll" DestinationFolder="@(ModManagerThirdPartyFolder)" />
+    <Copy SourceFiles="$(PkgMessagePack_Annotations)\lib\netstandard2.0\MessagePack.Annotations.dll" DestinationFolder="@(ModManagerThirdPartyFolder)" />
+  </Target>
+    
   <ItemGroup>
-  	<EmbeddedResource Include="Profiles.bin" />
+    <EmbeddedResource Include="Profiles.bin" />
   </ItemGroup>
-  
   <ItemGroup>
-  	<PackageReference Include="MessagePack" Version="3.1.8" />
-  	<PackageReference Include="MessagePack.Annotations" Version="3.1.8" />
+    <ProjectReference Include="..\FrostyHash\FrostyHash.csproj" />
   </ItemGroup>
-
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
 </Project>
