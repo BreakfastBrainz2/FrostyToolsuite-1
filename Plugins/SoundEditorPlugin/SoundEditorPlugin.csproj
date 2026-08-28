@@ -85,18 +85,22 @@
   </Target>
   
   <ItemGroup>
-    <ProjectReference Include="..\..\FrostyControls\FrostyControls.csproj">
-      <Private>false</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\..\FrostyPlugin\FrostyCore.csproj">
-      <Private>false</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\..\FrostySdk\FrostySdk.csproj">
-      <Private>false</Private>
-    </ProjectReference>
+    <ProjectReference Include="..\..\FrostyControls\FrostyControls.csproj" />
+    <ProjectReference Include="..\..\FrostyPlugin\FrostyCore.csproj" />
+    <ProjectReference Include="..\..\FrostySdk\FrostySdk.csproj" />
   </ItemGroup>
   
   <ItemGroup>
     <Resource Include="Images\SoundFileType.png" />
   </ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Resources\Tool.lib.zip">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\vgmstream.zip">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+	</ItemGroup>
+
 </Project>
