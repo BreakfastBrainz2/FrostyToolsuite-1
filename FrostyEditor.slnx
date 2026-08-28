@@ -115,6 +115,10 @@
       <BuildType Solution="Release|*" Project="Release - Final" />
       <Platform Project="x64" />
     </Project>
+    <Project Path="Plugins/RenamePlugin/RenamePlugin.csproj">
+      <BuildType Solution="Release|*" Project="Release - Alpha" />
+      <Platform Project="x64" />
+    </Project>
     <Project Path="Plugins/RootInstanceEntriesPlugin/RootInstanceEntriesPlugin.csproj">
       <BuildType Solution="Release|*" Project="Release - Alpha" />
       <Platform Project="x64" />
