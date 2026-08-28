@@ -1,12 +1,13 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
-#if NEW_NET
 namespace FrostySdk.IO
 {
     public unsafe class DataStream : IDisposable
@@ -530,6 +531,18 @@ namespace FrostySdk.IO
             }
         }
 
+        public void PadWrite(int alignment)
+        {
+            if (m_stream.Position % alignment != 0)
+            {
+                long padNeeded = alignment - (m_stream.Position % alignment);
+                for (int i = 0; i < padNeeded; i++)
+                {
+                    WriteByte(0);
+                }
+            }
+        }
+
         public void StepIn(long inPosition)
         {
             m_steps.Push(Position);
@@ -562,4 +575,3 @@ namespace FrostySdk.IO
         }
     }
 }
-#endif
