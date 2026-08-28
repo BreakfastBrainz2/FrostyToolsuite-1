@@ -305,7 +305,7 @@ namespace SoundEditorPlugin
             if (bufferPtr < SampleCount)
             {
                 int bufferSize = (SampleCount - bufferPtr > MAX_BUFFER_SIZE * track.ChannelCount) ? MAX_BUFFER_SIZE * track.ChannelCount : (int)(SampleCount - bufferPtr);
-                DataStream DS = new DataStream(bufferSize * sizeof(short), true, true);
+                var DS = new Vortice.DataStream(bufferSize * sizeof(short), true, true);
 
                 // interleave channels
                 while (DS.Position < DS.Length)

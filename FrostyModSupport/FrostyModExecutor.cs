@@ -2802,7 +2802,10 @@ namespace Frosty.ModSupport
                 // if dev mode is enabled, we can create the symlinks without a command prompt
                 foreach (SymLinkStruct arg in cmdArgs)
                 {
-                    File.CreateSymbolicLink(arg.dest, arg.src);
+                    if (arg.isFolder)
+                        Directory.CreateSymbolicLink(arg.dest, arg.src);
+                    else
+                        File.CreateSymbolicLink(arg.dest, arg.src);
                 }
             }
             else

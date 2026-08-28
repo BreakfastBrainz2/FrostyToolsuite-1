@@ -33,7 +33,7 @@ namespace MeshSetPlugin.Render
             meshLod = lod;
 
             byte[] chunkData = GetChunkData();
-            using (DataStream chunkStream = new DataStream((int)lod.IndexBufferSize, false, true))
+            using (Vortice.DataStream chunkStream = new Vortice.DataStream((int)lod.IndexBufferSize, false, true))
             {
                 chunkStream.Write(chunkData, (int)lod.VertexBufferSize, (int)lod.IndexBufferSize);
                 chunkStream.Position = 0;
@@ -241,7 +241,7 @@ namespace MeshSetPlugin.Render
                         GeometryDeclarationDesc.Stream stream = section.MeshSection.GeometryDeclDesc[0].Streams[i];
 
                         int size = (int)(stream.VertexStride * section.MeshSection.VertexCount);
-                        using (DataStream chunkStream = new DataStream(size, false, true))
+                        using (Vortice.DataStream chunkStream = new Vortice.DataStream(size, false, true))
                         {
                             chunkStream.Write(reader.ReadBytes(size), 0, size);
                             chunkStream.Position = 0;
@@ -682,7 +682,7 @@ namespace MeshSetPlugin.Render
 
             // write them to the vertex buffer
             int size = (int)(Marshal.SizeOf<FallbackVertex>() * meshSection.VertexCount);
-            using (DataStream stream = new DataStream(size, false, true))
+            using (Vortice.DataStream stream = new Vortice.DataStream(size, false, true))
             {
                 foreach (FallbackVertex vert in vertices)
                     stream.Write<FallbackVertex>(vert);
