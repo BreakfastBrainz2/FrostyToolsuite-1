@@ -123,6 +123,10 @@
       <BuildType Solution="Release|*" Project="Release - Alpha" />
       <Platform Project="x64" />
     </Project>
+    <Project Path="Plugins/ScriptAssetPlugin/ScriptAssetPlugin.csproj">
+      <BuildType Solution="Release|*" Project="Release - Alpha" />
+      <Platform Project="x64" />
+    </Project>
     <Project Path="Plugins/SkeletonImportFromXmlPlugin/SkeletonImportFromXmlPlugin.csproj">
       <BuildType Solution="Release|*" Project="Release - Alpha" />
       <Platform Project="x64" />
