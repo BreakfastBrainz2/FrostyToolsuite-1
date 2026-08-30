@@ -1,230 +1,146 @@
+using Frosty.Hash;
+using FrostySdk.Interfaces;
+using FrostySdk.Managers.Info.FileInfo;
 using System;
 using System.Collections.Generic;
-using Frosty.Hash;
 
-namespace FrostySdk.Managers.Entries
+namespace FrostySdk.Managers.Entries;
+
+public enum AssetDataLocation
 {
-    public enum AssetDataLocation
-    {
-        Cas,
-        SuperBundle,
-        Cache,
-        CasNonIndexed
+    Cas,
+    SuperBundle,
+    Cache,
+    CasNonIndexed
+}
+
+public class AssetExtraData
+{
+    public Sha1 BaseSha1;
+    public Sha1 DeltaSha1;
+    public long DataOffset;
+    public int SuperBundleId;
+    public bool IsPatch;
+    public string CasPath = "";
+}
+
+public abstract class AssetEntry
+{
+    /// <summary>
+    /// The Type of this <see cref="AssetEntry"/>.
+    /// </summary>
+    public virtual string Type { get; internal set; } = string.Empty;
+
+    /// <summary>
+    /// The AssetType of this <see cref="AssetEntry"/>.
+    /// </summary>
+    public virtual string AssetType => string.Empty;
+
+    /// <summary>
+    /// The Filename of this <see cref="AssetEntry"/>.
+    /// </summary>
+    public virtual string Filename {
+        get {
+            int id = Name.LastIndexOf('/');
+            return id == -1 ? Name : Name[(id + 1)..];
+        }
     }
-    
-    public class AssetExtraData
-    {
-        public Sha1 BaseSha1;
-        public Sha1 DeltaSha1;
-        public long DataOffset;
-        public int SuperBundleId;
-        public bool IsPatch;
-        public string CasPath = "";
+
+    /// <summary>
+    /// The Path of this <see cref="AssetEntry"/>.
+    /// </summary>
+    public virtual string Path {
+        get {
+            int id = Name.LastIndexOf('/');
+            return id == -1 ? string.Empty : Name[..id];
+        }
     }
-    
-    public class AssetEntry
+
+    /// <summary>
+    /// The name of this <see cref="AssetEntry"/>.
+    /// </summary>
+    public string Name { get; internal set; } = string.Empty;
+
+    /// <summary>
+    /// The <see cref="Sha1"/> hash of the compressed data of this <see cref="AssetEntry"/>.
+    /// </summary>
+    public Sha1 Sha1 { get; internal set; }
+
+    /// <summary>
+    /// The size of the uncompressed data of this <see cref="AssetEntry"/>.
+    /// </summary>
+    public long OriginalSize { get; internal set; }
+
+    /// <summary>
+    /// The Bundles that contain this <see cref="AssetEntry"/>.
+    /// </summary>
+    public readonly HashSet<int> Bundles = new();
+
+    internal IFileInfo? FileInfo => m_fileInfo;
+
+    private IFileInfo? m_fileInfo;
+
+    protected AssetEntry(Sha1 inSha1, long inOriginalSize)
     {
-        public virtual string Name { get; set; }
-        public virtual string Type { get; set; }
-        public virtual string AssetType { get; }
+        Sha1 = inSha1;
+        OriginalSize = inOriginalSize;
+    }
 
-        public virtual string DisplayName => Filename + ((IsDirty) ? "*" : "");
-        public virtual string Filename
+    /// <summary>
+    /// Checks if this <see cref="AssetEntry"/> is in the specified Bundle.
+    /// </summary>
+    /// <param name="bid">The Id of the Bundle.</param>
+    /// <returns></returns>
+    public bool IsInBundle(int bid) => Bundles.Contains(bid);
+
+    /// <summary>
+    /// Iterates through all bundles that the asset is a part of
+    /// </summary>
+    public IEnumerable<int> EnumerateBundles() => Bundles;
+
+    internal void AddFileInfo(IFileInfo? inFileInfo)
+    {
+        if (inFileInfo is null)
         {
-            get
-            {
-                int id = Name.LastIndexOf('/');
-                return id == -1 ? Name : Name.Substring(id + 1);
-            }
-        }
-        public virtual string Path
-        {
-            get
-            {
-                int id = Name.LastIndexOf('/');
-                return id == -1 ? "" : Name.Substring(0, id);
-            }
-        }
-
-        public Sha1 Sha1;
-        public Sha1 BaseSha1;
-
-        public long Size;
-        public long OriginalSize;
-        public bool IsInline;
-        public AssetDataLocation Location;
-        public AssetExtraData ExtraData;
-
-        public List<int> Bundles = new List<int>();
-        public List<int> AddedBundles = new List<int>();
-        public List<int> RemBundles = new List<int>();
-
-        public ModifiedAssetEntry ModifiedEntry;
-        public List<AssetEntry> LinkedAssets = new List<AssetEntry>();
-
-        private bool m_dirty;
-        
-        /// <summary>
-        /// returns true if this asset was added
-        /// </summary>
-        public bool IsAdded { get; set; }
-
-        /// <summary>
-        /// returns true if this asset or any asset linked to it is modified
-        /// </summary>
-        public virtual bool IsModified => IsDirectlyModified || IsIndirectlyModified;
-
-        /// <summary>
-        /// returns true if this asset (and only this asset) is modified
-        /// </summary>
-        public bool IsDirectlyModified => ModifiedEntry != null || AddedBundles.Count != 0 || RemBundles.Count != 0;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public bool HasModifiedData => ModifiedEntry != null && (ModifiedEntry.Data != null || ModifiedEntry.DataObject != null);
-
-        /// <summary>
-        /// returns true if this asset is considered modified through another linked asset
-        /// ie. An ebx would be considered modified if its linked resource has been modified
-        /// </summary>
-        public bool IsIndirectlyModified
-        {
-            get
-            {
-                foreach (AssetEntry entry in LinkedAssets)
-                {
-                    if (entry.IsModified)
-                        return true;
-                }
-                return false;
-            }
+            return;
         }
 
-        /// <summary>
-        /// returns true if this asset, or any asset linked to it is dirty
-        /// </summary>
-        public virtual bool IsDirty
+        if (!inFileInfo.FileExists())
         {
-            get
-            {
-                if (m_dirty)
-                {
-                    return true;
-                }
-
-                foreach (AssetEntry entry in LinkedAssets)
-                {
-                    if (entry.IsDirty)
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            set
-            {
-                if (m_dirty != value)
-                {
-                    m_dirty = value;
-                    if (m_dirty)
-                    {
-                        OnModified();
-                    }
-                }
-            }
+            return;
         }
 
-        /// <summary>
-        /// Links the current asset to another
-        /// </summary>
-        public void LinkAsset(AssetEntry assetToLink)
+        if (m_fileInfo is null)
         {
-            if (!LinkedAssets.Contains(assetToLink))
-            {
-                LinkedAssets.Add(assetToLink);
-            }
-
-            if (assetToLink is ChunkAssetEntry entry)
-            {
-                if (entry.HasModifiedData)
-                {
-                    // store the res/ebx name in the chunk
-                    entry.ModifiedEntry.H32 = Fnv1.HashString(Name.ToLower());
-                }
-                else
-                {
-                    // asset was added to bundle (so no ModifiedEntry)
-                    entry.H32 = Fnv1.HashString(Name.ToLower());
-                }
-            }
+            m_fileInfo = inFileInfo;
+            return;
         }
 
-        /// <summary>
-        /// Adds the current asset to the specified bundle
-        /// </summary>
-        public bool AddToBundle(int bid)
+        if (!m_fileInfo.IsComplete() && inFileInfo.IsComplete())
         {
-            if (IsInBundle(bid))
-            {
-                return false;
-            }
-
-            AddedBundles.Add(bid);
-            IsDirty = true;
-
-            return true;
+            m_fileInfo = inFileInfo;
+            return;
         }
 
-        /// <summary>
-        /// Adds the current asset to the specified bundles
-        /// </summary>
-        public bool AddToBundles(IEnumerable<int> bundles)
+        if (m_fileInfo.IsComplete() && !inFileInfo.IsComplete())
         {
-            bool added = false;
-            foreach (int bid in bundles)
-            {
-                if (!Bundles.Contains(bid) && !AddedBundles.Contains(bid))
-                {
-                    AddedBundles.Add(bid);
-                    IsDirty = true;
-                    added = true;
-                }
-            }
-
-            return added;
+            return;
         }
 
-        /// <summary>
-        /// Returns true if asset is in the specified bundle
-        /// </summary>
-        public bool IsInBundle(int bid) => Bundles.Contains(bid) || AddedBundles.Contains(bid);
-
-        /// <summary>
-        /// Iterates through all bundles that the asset is a part of
-        /// </summary>
-        public IEnumerable<int> EnumerateBundles(bool addedOnly = false)
+        if (inFileInfo is CasFileInfo && m_fileInfo is not CasFileInfo)
         {
-            if (!addedOnly)
-            {
-                for (int i = 0; i < Bundles.Count; i++)
-                {
-                    if (!RemBundles.Contains(Bundles[i]))
-                    {
-                        yield return Bundles[i];
-                    }
-                }
-            }
-
-            for (int i = 0; i < AddedBundles.Count; i++)
-            {
-                yield return AddedBundles[i];
-            }
+            m_fileInfo = inFileInfo;
+            return;
         }
 
-        public virtual void ClearModifications() => ModifiedEntry = null;
+        if (m_fileInfo is CasFileInfo && inFileInfo is not CasFileInfo)
+        {
+            return;
+        }
 
-        public event EventHandler AssetModified;
-        public void OnModified() => AssetModified?.Invoke(this, new EventArgs());
+        if (m_fileInfo.IsDelta() && !inFileInfo.IsDelta())
+        {
+            m_fileInfo = inFileInfo;
+        }
     }
 }

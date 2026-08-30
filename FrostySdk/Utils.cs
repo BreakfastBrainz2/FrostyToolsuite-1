@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using System.Text;
 using MessagePack;
 using MessagePack.Resolvers;
+using FrostySdk.BaseProfile;
 
 namespace FrostySdk
 {
@@ -433,16 +434,6 @@ namespace FrostySdk
     }
     #endregion
 
-    public enum CompressionType
-    {
-        Default,
-        None,
-        ZLib,
-        ZStd,
-        LZ4,
-        Oodle
-    }
-
     internal static class Kernel32
     {
         [DllImport("kernel32.dll", EntryPoint = "LoadLibraryEx", SetLastError = true)]
@@ -547,7 +538,7 @@ namespace FrostySdk
         internal static LoadLibraryHandle handle;
         internal static void Bind(string basePath)
         {
-            ICompressionUtils utils = ProfilesLibrary.Profile.GetCompressionUtils();
+            ICompressionUtils utils = new BaseCompressionUtils();
 
             if (!utils.LoadOodle)
                 return;
@@ -643,7 +634,7 @@ namespace FrostySdk
 
         internal static void Bind()
         {
-            ICompressionUtils utils = ProfilesLibrary.Profile.GetCompressionUtils();
+            ICompressionUtils utils = new BaseCompressionUtils();
 
             if (!utils.LoadZStd)
                 return;
@@ -751,6 +742,8 @@ namespace FrostySdk
 
     public static class Utils
     {
+        public static string BaseDirectory { get; set; } = string.Empty;
+
         public static string ToHex(this Guid guid)
         {
             StringBuilder sb = new StringBuilder();
@@ -1098,7 +1091,7 @@ namespace FrostySdk
 
         private static ulong CompressZStd(byte[] buffer, out byte[] compBuffer, out ushort compressCode, ref bool uncompressed)
         {
-            ICompressionUtils utils = ProfilesLibrary.Profile.GetCompressionUtils();
+            ICompressionUtils utils = new BaseCompressionUtils();
 
             int compressionLevel = utils.OodleCompressionLevel;
 

@@ -1,240 +1,131 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using FrostySdk.IO;
-using System.Reflection;
-using Frosty.Hash;
+﻿using Frosty.Hash;
 using FrostySdk.Interfaces;
+using FrostySdk.IO;
+using FrostySdk.IO.Compression;
+using FrostySdk.Profiles;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
 
-namespace FrostySdk
+namespace FrostySdk;
+
+public static class ProfilesLibrary
 {
-    public struct FileSystemSource
+    public static bool IsInitialized { get; private set; }
+
+    // v1 specific stuff, ideally get rid of these at some point
+    public static Type? Deobfuscator => Type.GetType("FrostySdk.Deobfuscators." + s_effectiveProfile?.Deobfuscator ?? "NullDeobfuscator");
+    public static Type? AssetLoader => Type.GetType("FrostySdk.Managers." + s_effectiveProfile?.AssetLoader ?? "StandardAssetLoader");
+
+    public static string ProfileName => s_effectiveProfile?.Name ?? string.Empty;
+    public static string DisplayName => s_effectiveProfile?.DisplayName ?? string.Empty;
+    public static string InternalName => s_effectiveProfile?.InternalName ?? string.Empty;
+    public static string TypeInfoSignature => s_effectiveProfile?.TypeInfoSignature ?? string.Empty;
+    public static bool HasStrippedTypeNames => s_effectiveProfile?.HasStrippedTypeNames ?? false;
+    public static string TypeHashSeed => s_effectiveProfile?.TypeHashSeed ?? string.Empty;
+    public static int DataVersion => s_effectiveProfile?.DataVersion ?? -1;
+    public static FrostbiteVersion FrostbiteVersion => s_effectiveProfile?.FrostbiteVersion ?? "0.0.0";
+    public static string SdkPath => s_effectiveProfile is null ? string.Empty : Path.Combine(Utils.BaseDirectory, "Sdk", $"{s_effectiveProfile.InternalName}.dll");
+
+    public static int EbxVersion => s_effectiveProfile?.EbxVersion ?? -1;
+    public static bool RequiresInitFsKey => s_effectiveProfile?.RequiresInitFsKey ?? false;
+    public static bool RequiresBundleKey => s_effectiveProfile?.RequiresBundleKey ?? false;
+    public static bool RequiresCasKey => s_effectiveProfile?.RequiresBundleKey ?? false;
+    public static bool MustAddChunks => s_effectiveProfile?.MustAddChunks ?? false;
+    public static bool EnableExecution => s_effectiveProfile?.EnableExecution ?? false;
+    public static bool HasAntiCheat => s_effectiveProfile?.HasAntiCheat ?? false;
+
+    public static CompressionType EbxCompression => (CompressionType)(s_effectiveProfile?.EbxCompression ?? 0);
+    public static CompressionType ResCompression => (CompressionType)(s_effectiveProfile?.ResCompression ?? 0);
+    public static CompressionType ChunkCompression => (CompressionType)(s_effectiveProfile?.ChunkCompression ?? 0);
+    public static CompressionType TextureChunkCompression => (CompressionType)(s_effectiveProfile?.TextureChunkCompression ?? 0);
+    public static int MaxBufferSize => s_effectiveProfile?.MaxBufferSize ?? 0;
+    public static int ZStdCompressionLevel => s_effectiveProfile?.ZStdCompressionLevel ?? 0;
+
+    public static string DefaultDiffuse => s_effectiveProfile?.DefaultDiffuse ?? string.Empty;
+    public static string DefaultNormals => s_effectiveProfile?.DefaultNormals ?? string.Empty;
+    public static string DefaultMask => s_effectiveProfile?.DefaultMask ?? string.Empty;
+    public static string DefaultTint => s_effectiveProfile?.DefaultTint ?? string.Empty;
+
+    public static bool HasLoadedProfile => s_effectiveProfile is not null;
+
+    public static readonly Dictionary<int, string> SharedBundles = new();
+
+    private static Profile? s_effectiveProfile;
+    private static bool s_profilesLoaded;
+    private static readonly List<Profile> s_profiles = new();
+
+    public static void Initialize()
     {
-        public string Path;
-        public bool SubDirs;
-    }
-
-    public enum ProfileVersion
-    {
-        NeedForSpeedRivals = 20131115,
-        Battlefield4 = 20141117,
-        DragonAgeInquisition = 20141118,
-        NeedForSpeed = 20151103,
-        StarWarsBattlefront = 20151117,
-        PlantsVsZombiesGardenWarfare = 20140225,
-        PlantsVsZombiesGardenWarfare2 = 20150223,
-        MirrorsEdgeCatalyst = 20160607,
-        Fifa17 = 20160927,
-        Battlefield1 = 20161021,
-        MassEffectAndromeda = 20170321,
-        Fifa18 = 20170929,
-        NeedForSpeedPayback = 20171110,
-        StarWarsBattlefrontII = 20171117,
-        Madden19 = 20180807,
-        Fifa19 = 20180914,
-        Battlefield5 = 20180628,
-        NeedForSpeedEdge = 20171210,
-        Anthem = 20181207,
-        Madden20 = 20190729,
-        PlantsVsZombiesBattleforNeighborville = 20190905,
-        Fifa20 = 20190911,
-        NeedForSpeedHeat = 20191101,
-        StarWarsSquadrons = 20201001,
-        Madden21 = 20200828,
-        Fifa21 = 20201009,
-        Madden22 = 20210820,
-        Fifa22 = 20210927,
-        Battlefield2042 = 20211119,
-        Madden23 = 20220819,
-        Fifa23 = 20220930,
-        NeedForSpeedUnbound = 20221129,
-        DeadSpace = 20230127,
-        DragonAgeVeilguard = 20241031
-    }
-
-    public struct Profile
-    {
-        public string Name;
-        public string DisplayName;
-        public IProfile ProfileData;
-        public int DataVersion;
-        public string CacheName;
-        public string Deobfuscator;
-        public string AssetLoader;
-        public List<FileSystemSource> Sources;
-        public string SDKFilename;
-        public byte[] Banner;
-
-        public int EbxVersion;
-        public bool RequiresKey;
-        public bool MustAddChunks;
-        public bool EnableExecution;
-        public bool ContainsEAC;
-
-        public string DefaultDiffuse;
-        public string DefaultNormals;
-        public string DefaultMask;
-        public string DefaultTint;
-
-        public Dictionary<int, string> SharedBundles;
-        public List<uint> IgnoredResTypes;
-    }
-
-    public static class ProfilesLibrary
-    {
-        public static IProfile Profile => m_effectiveProfile.ProfileData;
-        public static string ProfileName => m_effectiveProfile.Name;
-        public static string DisplayName => m_effectiveProfile.DisplayName;
-        public static string CacheName => m_effectiveProfile.CacheName;
-        public static Type Deobfuscator => Type.GetType(m_deobfuscatorNamespace + "." + m_effectiveProfile.Deobfuscator);
-        public static Type AssetLoader => Type.GetType(m_assetLoaderNamespace + "+" + m_effectiveProfile.AssetLoader);
-        public static int DataVersion => m_effectiveProfile.DataVersion;
-        public static List<FileSystemSource> Sources => m_effectiveProfile.Sources;
-        public static string SDKFilename => m_effectiveProfile.SDKFilename;
-        public static byte[] Banner => m_effectiveProfile.Banner;
-
-        public static int EbxVersion => m_effectiveProfile.EbxVersion;
-        public static bool RequiresKey => m_effectiveProfile.RequiresKey;
-        public static bool MustAddChunks => m_effectiveProfile.MustAddChunks;
-        public static bool EnableExecution => true;
-        public static bool ContainsEAC => m_effectiveProfile.ContainsEAC;
-
-        public static string DefaultDiffuse => m_effectiveProfile.DefaultDiffuse;
-        public static string DefaultNormals => m_effectiveProfile.DefaultNormals;
-        public static string DefaultMask => m_effectiveProfile.DefaultMask;
-        public static string DefaultTint => m_effectiveProfile.DefaultTint;
-
-        public static bool HasLoadedProfile => m_effectiveProfile.ProfileData != null;
-
-        public static Dictionary<int, string> SharedBundles => m_effectiveProfile.SharedBundles;
-
-        public static bool IsResTypeIgnored(Managers.Entries.ResourceType resType)
+        string profilesPath = Path.Combine(Utils.BaseDirectory, "Profiles");
+        if (Directory.Exists(profilesPath))
         {
-            return m_effectiveProfile.IgnoredResTypes.Contains((uint)resType);
-        }
-
-        private static Profile m_effectiveProfile;
-        private static readonly string m_deobfuscatorNamespace = typeof(Deobfuscators.NullDeobfuscator).Namespace;
-        private static readonly string m_assetLoaderNamespace = typeof(Managers.AssetManager).FullName;
-        private static readonly byte[][] m_obfuscationKey =
-        {
-            new byte[] { 0x46, 0x54, 0x76, 0x21, 0x37, 0x54 },
-            new byte[] { 0x48, 0x52, 0x32, 0x45, 0x56, 0x29 },
-            new byte[] { 0x4B, 0x5A, 0x4F, 0x52, 0x36, 0x2A },
-            new byte[] { 0x4D, 0x56, 0x43, 0x53, 0x3A, 0x52 },
-            new byte[] { 0x50, 0x5D, 0x46, 0x5A, 0x54, 0x2D },
-            new byte[] { 0x56, 0x50, 0x4A, 0x25, 0x43, 0x59 },
-        };
-
-        private static readonly List<Profile> m_profiles = new List<Profile>();
-
-        public static void Initialize(IEnumerable<Profile> pluginProfiles)
-        {
-            List<string> keys = new List<string>();
-            List<long> offsets = new List<long>();
-
-            using (NativeReader reader = new NativeReader(Assembly.GetExecutingAssembly().GetManifestResourceStream("FrostySdk.Profiles.bin")))
+            foreach (string file in Directory.EnumerateFiles(profilesPath))
             {
-                int numProfiles = reader.ReadInt();
-                for (int i = 0; i < numProfiles; i++)
+                Profile? profile;
+                using (FileStream stream = new(file, FileMode.Open, FileAccess.Read))
                 {
-                    string key = DecodeString(reader);
-                    long offset = reader.ReadLong();
-
-                    keys.Add(key);
-                    offsets.Add(offset);
+                    profile = JsonSerializer.Deserialize<Profile>(stream);
                 }
-
-                long startPos = reader.Position;
-                for (int i = 0; i < keys.Count; i++)
+                if (profile is not null)
                 {
-                    reader.Position = startPos + offsets[i];
-                    Profile profileStruct = new Profile();
-                    {
-                        profileStruct.Name = keys[i];
-                        profileStruct.DisplayName = DecodeString(reader);
-                        profileStruct.DataVersion = reader.ReadInt();
-                        profileStruct.CacheName = DecodeString(reader);
-                        profileStruct.Deobfuscator = DecodeString(reader);
-                        profileStruct.AssetLoader = DecodeString(reader);
-                        profileStruct.Sources = new List<FileSystemSource>();
-                        profileStruct.SharedBundles = new Dictionary<int, string>();
-                        profileStruct.IgnoredResTypes = new List<uint>();
-
-                        int numSources = reader.ReadInt();
-                        for (int j = 0; j < numSources; j++)
-                        {
-                            FileSystemSource source = new FileSystemSource();
-                            source.Path = DecodeString(reader);
-                            source.SubDirs = (reader.ReadByte() == 1);
-                            profileStruct.Sources.Add(source);
-                        }
-
-                        profileStruct.SDKFilename = DecodeString(reader);
-                        profileStruct.Banner = reader.ReadBytes(reader.ReadInt());
-                        profileStruct.DefaultDiffuse = DecodeString(reader);
-                        profileStruct.DefaultNormals = DecodeString(reader);
-                        profileStruct.DefaultMask = DecodeString(reader);
-                        profileStruct.DefaultTint = DecodeString(reader);
-
-                        int numSharedBundles = reader.ReadInt();
-                        for (int j = 0; j < numSharedBundles; j++)
-                        {
-                            string sharedBundle = DecodeString(reader);
-                            profileStruct.SharedBundles.Add(Fnv1.HashString(sharedBundle.ToLower()), sharedBundle);
-                        }
-
-                        int numIgnoredResTypes = reader.ReadInt();
-                        for (int j = 0; j < numIgnoredResTypes; j++)
-                            profileStruct.IgnoredResTypes.Add(reader.ReadUInt());
-
-                        profileStruct.MustAddChunks = (reader.ReadByte() == 1);
-                        profileStruct.EbxVersion = reader.ReadByte();
-                        profileStruct.RequiresKey = (reader.ReadByte() == 1);
-                        profileStruct.EnableExecution = (reader.ReadByte() != 1);
-                        profileStruct.ContainsEAC = reader.ReadByte() == 1;
-
-                        profileStruct.ProfileData = new BaseFrostyProfile();
-                    }
-
-                    m_profiles.Add(profileStruct);
+                    s_profiles.Add(profile);
                 }
             }
-
-            // Add profiles from plugins
-            foreach (Profile profile in pluginProfiles)
-                m_profiles.Add(profile);
         }
 
-        public static bool Initialize(string profileKey)
-        {
-            Profile? profile = m_profiles.Find((Profile a) => a.Name.Equals(profileKey, StringComparison.OrdinalIgnoreCase));
-            m_effectiveProfile = profile.Value;
+        s_profilesLoaded = true;
+    }
 
+    public static bool Initialize(string profileKey)
+    {
+        if (IsInitialized)
+        {
+            return true;
+        }
+        if (!s_profilesLoaded)
+        {
+            Initialize();
+        }
+        s_effectiveProfile = s_profiles.Find(a => a.Name.Equals(profileKey, StringComparison.OrdinalIgnoreCase));
+        if (s_effectiveProfile is not null)
+        {
+            foreach (string bundle in s_effectiveProfile.SharedBundles)
+            {
+                SharedBundles.Add(Utils.HashString(bundle, true), bundle);
+            }
+
+            FrostyLogger.Logger?.LogInfo($"Loading profile {s_effectiveProfile.DisplayName}");
+
+            IsInitialized = true;
             return true;
         }
 
-        public static bool HasProfile(string profileKey)
-        {
-            return m_profiles.FindIndex((Profile a) => a.Name.Equals(profileKey, StringComparison.OrdinalIgnoreCase)) != -1;
-        }
+        FrostyLogger.Logger?.LogError($"No profile found in directory {Path.Combine(Utils.BaseDirectory, "Profiles")} for key {profileKey}");
+        return false;
+    }
 
-        public static bool IsLoaded(params ProfileVersion[] versions)
-        {
-            return versions.Contains((ProfileVersion)DataVersion);
-        }
+    public static bool HasProfile(string profileKey)
+    {
+        return s_profiles.FindIndex(a => a.Name.Equals(profileKey, StringComparison.OrdinalIgnoreCase)) != -1;
+    }
 
-        private static string DecodeString(NativeReader reader)
-        {
-            int length = reader.Read7BitEncodedInt();
-            byte[] b = reader.ReadBytes(length);
+    public static bool IsLoaded(ProfileVersion version)
+    {
+        return version == (ProfileVersion)DataVersion;
+    }
 
-            for (int i = 0; i < length; i++)
-            {
-                b[i] = (byte)(b[i] ^ m_obfuscationKey[i % m_obfuscationKey.Length][(i + m_obfuscationKey.Length * (0x1000 | i)) % m_obfuscationKey.Length]);
-            }
-            return Encoding.UTF8.GetString(b);
-        }
+    public static bool IsLoaded(params ProfileVersion[] versions)
+    {
+        return versions.Contains((ProfileVersion)DataVersion);
+    }
+
+    public static string? GetDisplayName(string profileKey)
+    {
+        return s_profiles.Find(a => a.Name.Equals(profileKey, StringComparison.OrdinalIgnoreCase))?.DisplayName;
     }
 }

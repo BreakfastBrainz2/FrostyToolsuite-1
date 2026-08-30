@@ -1,5 +1,6 @@
 ﻿using FrostySdk.Attributes;
 using FrostySdk.Ebx;
+using FrostySdk.Managers;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -20,16 +21,14 @@ namespace FrostySdk.IO
         private long dataStartOffset;
 
 
-        public EbxReaderRiff(Stream InStream, FileSystemManager fs, bool inPatched)
-            : base(InStream, true)
+        public EbxReaderRiff(Stream InStream, bool inPatched)
+            : base(InStream)
         {
-            if (std == null && fs != null && fs.HasFileInMemoryFs("SharedTypeDescriptors.ebx"))
+            if (std == null && FileSystemManager.HasFileInMemoryFs("SharedTypeDescriptors.ebx"))
             {
-                std = new EbxSharedTypeDescriptors(fs, "SharedTypeDescriptors.ebx");
-                if (fs.HasFileInMemoryFs("SharedTypeDescriptors_patch.ebx"))
-                {
-                    patchStd = new EbxSharedTypeDescriptors(fs, "SharedTypeDescriptors_patch.ebx");
-                }
+                std = new EbxSharedTypeDescriptors("SharedTypeDescriptors.ebx");
+                if (FileSystemManager.HasFileInMemoryFs("SharedTypeDescriptors_patch.ebx"))
+                    patchStd = new EbxSharedTypeDescriptors("SharedTypeDescriptors_patch.ebx");
             }
 
             Position = 0;

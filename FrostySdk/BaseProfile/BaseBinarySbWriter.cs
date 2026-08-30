@@ -243,7 +243,7 @@ namespace FrostySdk.BaseProfile
                 // I maintained original zero filling logic deliberately to guarantee it shouldnt break anything
 
                 buffer = new byte[ms.Length];
-                byte[] key = KeyManager.Instance.GetKey("Key2");
+                byte[] key = KeyManager.GetKey("Key2");
 
                 using (Aes aes = Aes.Create())
                 {

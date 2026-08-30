@@ -111,18 +111,18 @@ namespace FrostyModManager.Windows
                 // add primary encryption key
                 byte[] key = new byte[0x10];
                 Array.Copy(keyData, key, 0x10);
-                KeyManager.Instance.AddKey("Key1", key);
+                KeyManager.AddKey("Key1", key);
 
                 if (keyData.Length > 0x10)
                 {
                     // add additional encryption keys
                     key = new byte[0x10];
                     Array.Copy(keyData, 0x10, key, 0, 0x10);
-                    KeyManager.Instance.AddKey("Key2", key);
+                    KeyManager.AddKey("Key2", key);
 
                     key = new byte[0x4000];
                     Array.Copy(keyData, 0x20, key, 0, 0x4000);
-                    KeyManager.Instance.AddKey("Key3", key);
+                    KeyManager.AddKey("Key3", key);
                 }
             }
 
@@ -153,7 +153,7 @@ namespace FrostyModManager.Windows
             Frosty.Core.App.FileSystemManager = new FileSystemManager(basePath);
             foreach (FileSystemSource source in ProfilesLibrary.Sources)
                 Frosty.Core.App.FileSystemManager.AddSource(source.Path, source.SubDirs);
-            Frosty.Core.App.FileSystemManager.Initialize(KeyManager.Instance.GetKey("Key1"));
+            Frosty.Core.App.FileSystemManager.Initialize(KeyManager.GetKey("Key1"));
 
             // check to make sure SDK is up to date
             if (!File.Exists(Frosty.Core.App.FileSystemManager.CacheName + ".cache"))

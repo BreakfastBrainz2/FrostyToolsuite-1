@@ -29,7 +29,7 @@ namespace FrostySdk.Managers
             public void Load(AssetManager parent, BinarySbDataHelper helper)
             {
                 // get second encryption key
-                byte[] key = KeyManager.Instance.GetKey("Key2");
+                byte[] key = KeyManager.GetKey("Key2");
                 foreach (CatalogInfo catalog in parent.m_fileSystem.EnumerateCatalogInfos())
                 {
                     foreach (string sbName in catalog.SuperBundles.Keys)
@@ -162,14 +162,14 @@ namespace FrostySdk.Managers
 
                                             using (BinarySbReader bundleReader = new BinarySbReader(ms, parent.m_fileSystem.CreateDeobfuscator()))
                                             {
-                                                DbObject bundle = bundleReader.ReadDbObject();
+                                                DbObjectV2 bundle = bundleReader.ReadDbObject();
 
                                                 BundleFileInfo fileInfo = files[0];
                                                 long dataOffset = fileInfo.Offset + (bundle.GetValue<long>("dataOffset") + 4);
                                                 long sizeLeft = fileInfo.Size - (bundle.GetValue<long>("dataOffset") + 4);
                                                 int fileIndex = 0;
 
-                                                foreach (DbObject ebx in bundle.GetValue<DbObject>("ebx"))
+                                                foreach (DbObjectV2 ebx in bundle.GetValue<DbObjectV2>("ebx"))
                                                 {
                                                     if (sizeLeft == 0)
                                                     {
@@ -184,7 +184,7 @@ namespace FrostySdk.Managers
                                                     dataOffset += size;
                                                     sizeLeft -= size;
                                                 }
-                                                foreach (DbObject res in bundle.GetValue<DbObject>("res"))
+                                                foreach (DbObjectV2 res in bundle.GetValue<DbObjectV2>("res"))
                                                 {
                                                     if (sizeLeft == 0)
                                                     {
@@ -199,7 +199,7 @@ namespace FrostySdk.Managers
                                                     dataOffset += size;
                                                     sizeLeft -= size;
                                                 }
-                                                foreach (DbObject chunk in bundle.GetValue<DbObject>("chunks"))
+                                                foreach (DbObjectV2 chunk in bundle.GetValue<DbObjectV2>("chunks"))
                                                 {
                                                     if (sizeLeft == 0)
                                                     {

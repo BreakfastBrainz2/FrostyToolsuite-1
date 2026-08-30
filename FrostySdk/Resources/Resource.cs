@@ -18,12 +18,15 @@ namespace FrostySdk.Resources
         {
         }
 
-        public virtual void Read(NativeReader reader, AssetManager am, ResAssetEntry entry, ModifiedResource modifiedData)
+        public virtual void Read(NativeReader reader, ResAssetEntry entry, ModifiedResource modifiedData)
         {
             resMeta = entry.ResMeta;
             resRid = entry.ResRid;
 
         }
+
+        public virtual void Deserialize(DataStream inStream, ReadOnlySpan<byte> inResMeta)
+        { }
 
         /// <summary>
         /// Saves the resource as a specialized ModifiedResource object

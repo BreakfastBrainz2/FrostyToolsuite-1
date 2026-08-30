@@ -6,13 +6,13 @@ namespace FrostySdk.Managers
 {
     public partial class AssetManager
     {
-        internal class StandardAssetLoader : IAssetLoader
+        internal class EdgeAssetLoader : IAssetLoader
         {
             public void Load(AssetManager parent, BinarySbDataHelper helper)
             {
                 foreach (string superBundleName in parent.m_fileSystem.SuperBundles)
                 {
-                    DbObject toc = parent.ProcessTocChunks(string.Format("{0}.toc", superBundleName), helper, false);
+                    DbObjectV2 toc = parent.ProcessTocChunks(string.Format("{0}.toc", superBundleName), helper, false);
                     if (toc == null)
                         continue;
 
@@ -22,19 +22,18 @@ namespace FrostySdk.Managers
 
                     using (NativeReader sbReader = new NativeReader(new FileStream(parent.m_fileSystem.ResolvePath(string.Format("{0}.sb", superBundleName)), FileMode.Open, FileAccess.Read)))
                     {
-                        foreach (DbObject bundle in toc.GetValue<DbObject>("bundles"))
+                        DbObjectV2 bundles = toc.GetValue<DbObjectV2>("bundles");
+                        for (int i = 0; i < bundles.GetValue<DbObjectV2>("names").Count; i++)
                         {
-                            string bundleName = bundle.GetValue<string>("id").ToLower();
-                            long offset = bundle.GetValue<long>("offset");
-                            long size = bundle.GetValue<long>("size");
-                            bool isDeltaBundle = bundle.GetValue<bool>("delta");
-                            bool isBaseBundle = bundle.GetValue<bool>("base");
+                            string bundleName = bundles.GetValue<DbObjectV2>("names")[i] as string;
+                            int offset = (int)bundles.GetValue<DbObjectV2>("offsets")[i];
+                            int size = (int)bundles.GetValue<DbObjectV2>("sizes")[i];
 
                             // add new bundle entry
-                            parent.m_bundles.Add(new BundleEntry { Name = bundleName, SuperBundleId = parent.m_superBundles.Count - 1 });
+                            parent.m_bundles.Add(new BundleEntry() { Name = bundleName, SuperBundleId = parent.m_superBundles.Count - 1 });
                             int bundleId = parent.m_bundles.Count - 1;
 
-                            DbObject sb = null;
+                            DbObjectV2 sb = null;
                             using (DbReader reader = new DbReader(sbReader.CreateViewStream(offset, size), parent.m_fileSystem.CreateDeobfuscator()))
                                 sb = reader.ReadDbObject();
 

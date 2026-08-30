@@ -59,7 +59,7 @@ namespace Frosty.ModSupport
                     NativeWriter casWriter = null;
                     int casFileIndex = 0;
 
-                    byte[] key = KeyManager.Instance.GetKey("Key2");
+                    byte[] key = KeyManager.GetKey("Key2");
                     foreach (string sbName in CatalogInfo.SuperBundles.Keys)
                     {
                         cancelToken.ThrowIfCancellationRequested();

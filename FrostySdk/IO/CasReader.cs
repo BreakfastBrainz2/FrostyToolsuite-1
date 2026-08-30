@@ -96,7 +96,7 @@ namespace FrostySdk.IO
             byte[] tmpBuffer = ReadBytes(bufferSize);
             if (unobfuscate)
             {
-                byte[] obfusBlock = KeyManager.Instance.GetKey("Key3");
+                byte[] obfusBlock = KeyManager.GetKey("Key3");
                 for (int i = 0; i < bufferSize; i++)
                     tmpBuffer[i] ^= obfusBlock[i & 0x3FFF];
             }
@@ -108,7 +108,7 @@ namespace FrostySdk.IO
             byte[] tmpBuffer = ReadBytes(bufferSize);
             if (unobfuscate)
             {
-                byte[] obfusBlock = KeyManager.Instance.GetKey("Key3");
+                byte[] obfusBlock = KeyManager.GetKey("Key3");
                 for (int i = 0; i < bufferSize; i++)
                     tmpBuffer[i] ^= obfusBlock[i & 0x3FFF];
             }
@@ -130,7 +130,7 @@ namespace FrostySdk.IO
             byte[] tmpBuffer = ReadBytes(bufferSize);
             if (unobfuscate)
             {
-                byte[] obfusBlock = KeyManager.Instance.GetKey("Key3");
+                byte[] obfusBlock = KeyManager.GetKey("Key3");
                 for (int i = 0; i < bufferSize; i++)
                     tmpBuffer[i] ^= obfusBlock[i & 0x3FFF];
             }

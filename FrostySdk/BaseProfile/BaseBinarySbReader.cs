@@ -60,7 +60,7 @@ namespace FrostySdk.BaseProfile
             // decrypt the data
             if (magic == BaseBinarySb.Magic.Encrypted)
             {
-                byte[] key = KeyManager.Instance.GetKey("Key2");
+                byte[] key = KeyManager.GetKey("Key2");
 
                 using (Aes aes = Aes.Create())
                 {

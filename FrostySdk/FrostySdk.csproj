@@ -73,6 +73,13 @@
   </ItemDefinitionGroup>
     
   <ItemGroup>
+    <Compile Remove="Managers\Loaders\Old\**" />
+    <EmbeddedResource Remove="Managers\Loaders\Old\**" />
+    <None Remove="Managers\Loaders\Old\**" />
+    <Page Remove="Managers\Loaders\Old\**" />
+  </ItemGroup>
+    
+  <ItemGroup>
     <PackageReference Include="MessagePack" Version="3.1.8" />
     <PackageReference Include="MessagePack.Annotations" Version="3.1.8" />
   </ItemGroup>
@@ -97,6 +104,10 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FrostyHash\FrostyHash.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Managers\Loaders\" />
+    <Folder Include="V2\" />
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

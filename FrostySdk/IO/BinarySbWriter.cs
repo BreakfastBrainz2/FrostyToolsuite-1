@@ -19,7 +19,7 @@ namespace FrostySdk.IO
             : base(inStream, leaveOpen: leaveOpen)
         {
             endian = inEndian;
-            binarySbWriter = ProfilesLibrary.Profile.GetBinarySbWriter();
+            binarySbWriter = new BaseBinarySbWriter();
         }
 
         public override void Write(DbObject inObj)

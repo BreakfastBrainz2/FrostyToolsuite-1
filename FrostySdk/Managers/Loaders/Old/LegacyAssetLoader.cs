@@ -19,7 +19,7 @@ namespace FrostySdk.Managers
                     bool patchFileExists = false;
 
                     // process base toc, bail out if it doesnt exist
-                    DbObject baseToc = parent.ProcessTocChunks(string.Format("native_data/{0}.toc", superBundleName), helper, true);
+                    DbObjectV2 baseToc = parent.ProcessTocChunks(string.Format("native_data/{0}.toc", superBundleName), helper, true);
                     if (baseToc == null)
                         continue;
                     bool isBinarySuperBundle = !baseToc.GetValue<bool>("cas");
@@ -27,11 +27,11 @@ namespace FrostySdk.Managers
                     parent.WriteToLog("Loading data ({0})", superBundleName);
 
                     // process patch toc
-                    DbObject patchToc = parent.ProcessTocChunks(string.Format("native_patch/{0}.toc", superBundleName), helper);
+                    DbObjectV2 patchToc = parent.ProcessTocChunks(string.Format("native_patch/{0}.toc", superBundleName), helper);
 
                     // default to base bundles first
-                    DbObject baseBundleList = baseToc.GetValue<DbObject>("bundles");
-                    DbObject patchBundleList = baseBundleList;
+                    DbObjectV2 baseBundleList = baseToc.GetValue<DbObjectV2>("bundles");
+                    DbObjectV2 patchBundleList = baseBundleList;
 
                     // no bundles, move on
                     if (baseBundleList.Count == 0)
@@ -41,7 +41,7 @@ namespace FrostySdk.Managers
                     Dictionary<string, BaseBundleInfo> baseBundles = new Dictionary<string, BaseBundleInfo>();
                     if (isBinarySuperBundle)
                     {
-                        foreach (DbObject bundle in baseBundleList)
+                        foreach (DbObjectV2 bundle in baseBundleList)
                         {
                             BaseBundleInfo bi = new BaseBundleInfo
                             {
@@ -56,7 +56,7 @@ namespace FrostySdk.Managers
                     if (patchToc != null)
                     {
                         // use patch bundle list instead
-                        patchBundleList = patchToc.GetValue<DbObject>("bundles");
+                        patchBundleList = patchToc.GetValue<DbObjectV2>("bundles");
                         patchFileExists = true;
                     }
 
@@ -68,7 +68,7 @@ namespace FrostySdk.Managers
                         patchMf = new NativeReader(new FileStream(parent.m_fileSystem.ResolvePath(string.Format("native_patch/{0}.sb", superBundleName)), FileMode.Open, FileAccess.Read));
 
                     // iterate bundles in superbundle
-                    foreach (DbObject bundle in patchBundleList)
+                    foreach (DbObjectV2 bundle in patchBundleList)
                     {
                         string bundleName = bundle.GetValue<string>("id").ToLower();
                         long offset = bundle.GetValue<long>("offset");
@@ -85,7 +85,7 @@ namespace FrostySdk.Managers
                             ? baseMf.CreateViewStream(offset, size)
                             : patchMf.CreateViewStream(offset, size);
 
-                        DbObject sb = null;
+                        DbObjectV2 sb = null;
                         if (isBinarySuperBundle)
                         {
                             if (isDeltaBundle)
@@ -101,7 +101,7 @@ namespace FrostySdk.Managers
                                 using (BinarySbReader reader = new LegacyBinarySbReader(baseStream, stream, parent.m_fileSystem.CreateDeobfuscator()))
                                     sb = reader.ReadDbObject();
 
-                                DbObject baseSb = null;
+                                DbObjectV2 baseSb = null;
                                 if (bi != null)
                                 {
                                     using (BinarySbReader reader = new LegacyBinarySbReader(baseMf.CreateViewStream(bi.Offset, bi.Size), bi.Offset, parent.m_fileSystem.CreateDeobfuscator()))

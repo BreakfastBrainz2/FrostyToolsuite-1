@@ -128,30 +128,40 @@ namespace FrostySdk.Managers.Entries
     
     public class ResAssetEntry : AssetEntry
     {
-        // cache type names because reflection is slow
-        private static readonly Dictionary<uint, string> ResourceTypeNameMap = Enum.GetValues(typeof(ResourceType))
-        .Cast<ResourceType>()
-        .ToDictionary(rt => (uint)rt, rt => rt.ToString());
-
-        public override string Type => ResourceTypeNameMap.TryGetValue(ResType, out string name) ? name : ResType.ToString();
+        public override string Type => ResType.ToString();
         public override string AssetType => "res";
-        /*public override string Name
+
+        /// <summary>
+        /// The Rid of this <see cref="ResAssetEntry"/>.
+        /// </summary>
+        public ulong ResRid { get; }
+
+        /// <summary>
+        /// The <see cref="ResourceType"/> of this <see cref="ResAssetEntry"/>.
+        /// </summary>
+        public ResourceType ResType { get; }
+
+        /// <summary>
+        /// The Meta of this <see cref="ResAssetEntry"/>.
+        /// </summary>
+        public byte[] ResMeta { get; }
+
+        public ResAssetEntry(string inName, Sha1 inSha1, long inOriginalSize, ulong inResRid, uint inResType, byte[] inResMeta)
+            : base(inSha1, inOriginalSize)
         {
-            get
-            {
-                // TODO: @techdebt find better method to move blueprint bundles to sub-folder, this will most likely break writing.
-                if (ProfilesLibrary.IsLoaded(ProfileVersion.Battlefield2042) &&
-                    (base.Name.StartsWith("cd_") || base.Name.StartsWith("md_") &! base.Name.Contains("win32/")))
-                {
-                    return $"win32/{base.Name}";
-                }
+            Name = inName;
+            ResRid = inResRid;
+            ResType = (ResourceType)inResType;
+            ResMeta = inResMeta;
+        }
 
-                return base.Name;
-            }
-        }*/
-
-        public ulong ResRid;
-        public uint ResType;
-        public byte[] ResMeta;
+        public ResAssetEntry(string inName, Sha1 inSha1, long inOriginalSize, ulong inResRid, ResourceType inResType, byte[] inResMeta)
+            : base(inSha1, inOriginalSize)
+        {
+            Name = inName;
+            ResRid = inResRid;
+            ResType = inResType;
+            ResMeta = inResMeta;
+        }
     }
 }

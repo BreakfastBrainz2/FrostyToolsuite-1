@@ -164,7 +164,7 @@ namespace FrostyEditor.Windows
                 try
                 {
                     Array.Copy(keyData, key, 0x10);
-                    KeyManager.Instance.AddKey("Key1", key);
+                    KeyManager.AddKey("Key1", key);
                 }
                 catch
                 {
@@ -181,11 +181,11 @@ namespace FrostyEditor.Windows
                         // add additional encryption keys
                         key = new byte[0x10];
                         Array.Copy(keyData, 0x10, key, 0, 0x10);
-                        KeyManager.Instance.AddKey("Key2", key);
+                        KeyManager.AddKey("Key2", key);
 
                         key = new byte[0x4000];
                         Array.Copy(keyData, 0x20, key, 0, 0x4000);
-                        KeyManager.Instance.AddKey("Key3", key);
+                        KeyManager.AddKey("Key3", key);
                     }
                     catch
                     {
@@ -224,7 +224,7 @@ namespace FrostyEditor.Windows
             AssetManagerImportResult result = new AssetManagerImportResult();
 
             // load data from game or cache
-            await LoadData(logger, KeyManager.Instance.GetKey("Key1"), result);
+            await LoadData(logger, KeyManager.GetKey("Key1"), result);
 
             // check to make sure SDK is up to date
             if (TypeLibrary.GetSdkVersion() != App.FileSystem.Head)

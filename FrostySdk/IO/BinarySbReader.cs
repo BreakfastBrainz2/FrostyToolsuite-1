@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using Frosty.Hash;
+using FrostySdk.BaseProfile;
 using FrostySdk.Interfaces;
 using FrostySdk.Managers;
 
@@ -16,7 +17,7 @@ namespace FrostySdk.IO
         public BinarySbReader(Stream inStream, IDeobfuscator inDeobfuscator)
             : base(inStream, inDeobfuscator)
         {
-            binarySbReader = ProfilesLibrary.Profile.GetBinarySbReader();
+            binarySbReader = new BaseBinarySbReader();
         }
 
         public override DbObject ReadDbObject()

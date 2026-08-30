@@ -569,14 +569,14 @@ namespace FrostySdk.IO
 
     public class EbxReader : NativeReader
     {
-        public static EbxReader CreateProjectReader(Stream inStream, FileSystemManager fs)
+        public static EbxReader CreateProjectReader(Stream inStream)
         {
-            return ProfilesLibrary.EbxVersion >= 4 ? new EbxReaderV2(inStream, fs, true) : new EbxReader(inStream, true);
+            return ProfilesLibrary.EbxVersion >= 4 ? new EbxReaderV2(inStream, true) : new EbxReader(inStream, true);
         }
 
-        public static EbxReader CreateReader(Stream inStream, FileSystemManager fs = null, bool patched = false)
+        public static EbxReader CreateReader(Stream inStream, bool patched = false)
         {
-            return ProfilesLibrary.EbxVersion == 6 ? new EbxReaderRiff(inStream, fs, patched) : (ProfilesLibrary.EbxVersion & 1) != 0 ? new EbxReaderV2(inStream, fs, patched) : new EbxReader(inStream);
+            return ProfilesLibrary.EbxVersion == 6 ? new EbxReaderRiff(inStream, patched) : (ProfilesLibrary.EbxVersion & 1) != 0 ? new EbxReaderV2(inStream, patched) : new EbxReader(inStream);
         }
 
         public Guid FileGuid => fileGuid;

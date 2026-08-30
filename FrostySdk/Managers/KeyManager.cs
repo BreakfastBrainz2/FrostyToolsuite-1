@@ -1,26 +1,25 @@
 ﻿using System.Collections.Generic;
 
-namespace FrostySdk.Managers
+namespace FrostySdk.Managers;
+
+public static class KeyManager
 {
-    public class KeyManager
+    private static readonly Dictionary<string, byte[]> s_keys = new();
+
+    public static void AddKey(string id, byte[] data)
     {
-        private Dictionary<string, byte[]> keys = new Dictionary<string, byte[]>();
-
-        public static KeyManager Instance { get; } = new KeyManager();
-
-        private KeyManager()
-        {
-        }
-
-        public void AddKey(string id, byte[] data)
-        {
-            if (!keys.ContainsKey(id))
-                keys.Add(id, null);
-            keys[id] = data;
-        }
-
-        public byte[] GetKey(string id) => !keys.ContainsKey(id) ? null : keys[id];
-
-        public bool HasKey(string id) => keys.ContainsKey(id);
+        s_keys.TryAdd(id, data);
     }
+
+    public static byte[] GetKey(string id)
+    {
+        if (!s_keys.ContainsKey(id))
+        {
+            throw new KeyNotFoundException($"Could not find key with id: {id}");
+        }
+
+        return s_keys[id];
+    }
+
+    public static bool HasKey(string id) => s_keys.ContainsKey(id);
 }

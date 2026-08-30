@@ -1,4 +1,5 @@
-﻿using System;
+﻿using FrostySdk.Managers;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,11 +18,11 @@ namespace FrostySdk.IO
         private List<EbxField?> fields = new List<EbxField?>();
         private List<Guid?> typeInfoGuids = new List<Guid?>();
 
-        public EbxSharedTypeDescriptors(FileSystemManager fs, string name)
+        public EbxSharedTypeDescriptors(string name)
         {
-            File.WriteAllBytes(name, fs.GetFileFromMemoryFs(name));
+            File.WriteAllBytes(name, FileSystemManager.GetFileFromMemoryFs(name));
             bool patch = name.Contains("patch");
-            using (NativeReader reader = new NativeReader(new MemoryStream(fs.GetFileFromMemoryFs(name))))
+            using (NativeReader reader = new NativeReader(new BlockStream(FileSystemManager.GetFileFromMemoryFs(name))))
             {
                 EbxVersion magic = (EbxVersion)reader.ReadUInt();
                 if (magic == EbxVersion.Version4)

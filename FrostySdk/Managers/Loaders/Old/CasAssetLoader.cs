@@ -340,7 +340,7 @@ namespace FrostySdk.Managers
                     // TODO: make deobfuscator remove the obfs header
                     Stream stream = reader.CreateViewStream(flag == 1 ? bi.Offset + 0x22C : bi.Offset, bi.Size & ~0xC0000000);
 
-                    DbObject bundle = null;
+                    DbObjectV2 bundle = null;
                     using (BinarySbReader bundleReader = new BinarySbReader(stream, parent.m_fileSystem.CreateDeobfuscator()))
                     {
                         int bundleOffset = bundleReader.ReadInt(Endian.Big);
@@ -417,7 +417,7 @@ namespace FrostySdk.Managers
                             }
                         }
 
-                        for (int i = 0; i < bundle.GetValue<DbObject>("ebx").Count; i++)
+                        for (int i = 0; i < bundle.GetValue<DbObjectV2>("ebx").Count; i++)
                         {
                             if (flags[z++])
                             {
@@ -427,7 +427,7 @@ namespace FrostySdk.Managers
                                 casIndex = bundleReader.ReadByte();
                             }
 
-                            DbObject ebx = bundle.GetValue<DbObject>("ebx")[i] as DbObject;
+                            DbObjectV2 ebx = bundle.GetValue<DbObjectV2>("ebx")[i] as DbObjectV2;
                             offset = bundleReader.ReadInt(Endian.Big);
                             size = bundleReader.ReadInt(Endian.Big);
 
@@ -439,7 +439,7 @@ namespace FrostySdk.Managers
                                 ebx.SetValue("patch", true);
                         }
 
-                        for (int i = 0; i < bundle.GetValue<DbObject>("res").Count; i++)
+                        for (int i = 0; i < bundle.GetValue<DbObjectV2>("res").Count; i++)
                         {
                             if (flags[z++])
                             {
@@ -449,7 +449,7 @@ namespace FrostySdk.Managers
                                 casIndex = bundleReader.ReadByte();
                             }
 
-                            DbObject res = bundle.GetValue<DbObject>("res")[i] as DbObject;
+                            DbObjectV2 res = bundle.GetValue<DbObjectV2>("res")[i] as DbObjectV2;
                             offset = bundleReader.ReadInt(Endian.Big);
                             size = bundleReader.ReadInt(Endian.Big);
 
@@ -461,7 +461,7 @@ namespace FrostySdk.Managers
                                 res.SetValue("patch", true);
                         }
 
-                        for (int i = 0; i < bundle.GetValue<DbObject>("chunks").Count; i++)
+                        for (int i = 0; i < bundle.GetValue<DbObjectV2>("chunks").Count; i++)
                         {
                             if (flags[z++])
                             {
@@ -471,7 +471,7 @@ namespace FrostySdk.Managers
                                 casIndex = bundleReader.ReadByte();
                             }
 
-                            DbObject chunk = bundle.GetValue<DbObject>("chunks")[i] as DbObject;
+                            DbObjectV2 chunk = bundle.GetValue<DbObjectV2>("chunks")[i] as DbObjectV2;
                             offset = bundleReader.ReadInt(Endian.Big);
                             size = bundleReader.ReadInt(Endian.Big);
 

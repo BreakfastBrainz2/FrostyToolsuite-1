@@ -1,0 +1,46 @@
+﻿using System;
+using FrostySdk.IO;
+
+namespace FrostySdk.DbObjectElements;
+
+public class DbObjectGuid : DbObjectV2
+{
+    private Guid m_value;
+
+    protected internal DbObjectGuid(Type inType)
+        : base(inType)
+    {
+    }
+
+    public DbObjectGuid(Guid inValue)
+        : base(Type.Guid | Type.Anonymous)
+    {
+        m_value = inValue;
+    }
+
+    public DbObjectGuid(string inName, Guid inValue)
+        : base(Type.Guid, inName)
+    {
+        m_value = inValue;
+    }
+
+    public override Guid AsGuid()
+    {
+        return m_value;
+    }
+
+    protected override void InternalSerialize(DataStream stream)
+    {
+        stream.WriteGuid(m_value);
+    }
+
+    protected override void InternalDeserialize(DataStream stream)
+    {
+        m_value = stream.ReadGuid();
+    }
+
+    public override string? ToString()
+    {
+        return m_value.ToString();
+    }
+}

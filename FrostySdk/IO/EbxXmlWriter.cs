@@ -24,7 +24,6 @@ namespace FrostySdk.IO
         }
 
         private EbxAsset asset;
-		private AssetManager am;
         private List<object> objs = new List<object>();
         private Stream stream;
 
@@ -32,10 +31,9 @@ namespace FrostySdk.IO
         private bool writeOffsets;
         private string offsetKey;
         private readonly Stack<string> offsetKeyStack = new Stack<string>();
-        public EbxXmlWriter(EbxAsset inAsset, Stream inStream, AssetManager inAm, int inTabSize, bool inWriteOffsets)
+        public EbxXmlWriter(EbxAsset inAsset, Stream inStream, int inTabSize, bool inWriteOffsets)
         {
             asset = inAsset;
-            am = inAm;
             stream = inStream;
             tabSize = inTabSize;
             writeOffsets = inWriteOffsets;
@@ -207,7 +205,7 @@ namespace FrostySdk.IO
                         }
                         else if (Reference.Type == PointerRefType.External)
                         {
-                            EbxAssetEntry entry = am.GetEbxEntry(Reference.External.FileGuid);
+                            EbxAssetEntry entry = AssetManager.GetEbxEntry(Reference.External.FileGuid);
                             if (entry != null)
                             {
                                 SB.Append("[Ebx] " + entry.Name + " [" + Reference.External.ClassGuid + "]");

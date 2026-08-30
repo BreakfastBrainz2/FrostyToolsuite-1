@@ -1,369 +1,254 @@
 ﻿using Frosty.Hash;
 using FrostySdk.Interfaces;
 using FrostySdk.IO;
+using FrostySdk.Managers.CatResources;
+using FrostySdk.Managers.Info;
+using FrostySdk.Managers.Info.FileInfo;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 
-namespace FrostySdk.Managers
+namespace FrostySdk.Managers;
+
+public static class ResourceManager
 {
-    public class ResourceManager : ILoggable
+    public static bool IsInitialized { get; private set; }
+
+    private static readonly Dictionary<Sha1, CasFileInfo> s_resourceEntries = new();
+
+    private static readonly List<CatPatchEntry> s_patchEntries = new();
+
+    private static readonly Dictionary<Sha1, uint> s_sizeMap = new();
+
+    public static void LoadInstallChunks()
     {
-        private readonly FileSystemManager m_fileSystem;
-        private ILogger m_logger;
-
-        private Dictionary<Sha1, CatResourceEntry> m_resourceEntries = new Dictionary<Sha1, CatResourceEntry>();
-        private Dictionary<Sha1, CatPatchEntry> m_patchEntries = new Dictionary<Sha1, CatPatchEntry>();
-        private Dictionary<int, string> m_casFiles = new Dictionary<int, string>();
-
-        // Cached open readers, avoids opening/closing the same .sb and .cas files
-        private readonly Dictionary<string, NativeReader> m_openReaders = new Dictionary<string, NativeReader>();
-        private readonly object m_readerCacheLock = new object();
-        private NativeReader m_sbdataReader = null;
-        private readonly object m_sbdataLock = new object();
-        //private Dictionary<string, byte[]> keys = new Dictionary<string, byte[]>();
-
-        public ResourceManager(FileSystemManager inFileSystem)
+        foreach (InstallChunkInfo installChunkInfo in FileSystemManager.EnumerateInstallChunks())
         {
-            m_fileSystem = inFileSystem;
+            LoadInstallChunk(installChunkInfo);
+        }
+    }
+
+    public static void CLearInstallChunks()
+    {
+        s_resourceEntries.Clear();
+        s_patchEntries.Clear();
+    }
+
+    public static bool Initialize()
+    {
+        if (IsInitialized)
+        {
+            return true;
         }
 
-        // initialize manager
-        public void Initialize()
+        if (!FileSystemManager.IsInitialized)
         {
-            // bind compression libraries
-            ZStd.Bind();
-            Oodle.Bind(m_fileSystem.BasePath);
-
-            if (ProfilesLibrary.IsLoaded(ProfileVersion.NeedForSpeedEdge))
-            {
-                LoadDas();
-            }
-
-            if (!ProfilesLibrary.IsLoaded(ProfileVersion.Fifa19, ProfileVersion.Madden20))
-            {
-                WriteToLog("Loading catalogs");
-                foreach (string catalogName in m_fileSystem.Catalogs)
-                {
-                    LoadCatalog("native_data/" + catalogName + "/cas.cat");
-                    LoadCatalog("native_patch/" + catalogName + "/cas.cat");
-                }
-            }
-
-            if (m_fileSystem.HasFileInMemoryFs("Dictionaries/ebx.dict"))
-            {
-                // load dictionary from memoryFs (used for decompressing ebx)
-                ZStd.SetDictionary(m_fileSystem.GetFileFromMemoryFs("Dictionaries/ebx.dict"));
-            }
-            if (m_fileSystem.HasFileInMemoryFs("Scripts/CasEncrypt.yaml"))
-            {
-                // load casencrypt.yaml from memoryFs
-                using (NativeReader reader = new NativeReader(new MemoryStream(m_fileSystem.GetFileFromMemoryFs("Scripts/CasEncrypt.yaml"))))
-                {
-                    byte[] key = null;
-                    while (reader.Position < reader.Length)
-                    {
-                        string line = reader.ReadLine();
-                        if (line.Contains("keyid:"))
-                        {
-                            string[] arr = line.Split(':');
-                            KeyManager.Instance.AddKey(arr[1].Trim(), key);
-                        }
-                        else if (line.Contains("key:"))
-                        {
-                            string[] arr = line.Split(':');
-                            string keyStr = arr[1].Trim();
-
-                            key = new byte[keyStr.Length / 2];
-                            for (int i = 0; i < keyStr.Length / 2; i++)
-                                key[i] = Convert.ToByte(keyStr.Substring(i * 2, 2), 16);
-                        }
-                    }
-                }
-            }
-        }
-
-        // unpatched data from cas
-        public Stream GetResourceData(Sha1 sha1)
-        {
-            if (m_patchEntries.TryGetValue(sha1, out CatPatchEntry patchEntry))
-                return GetResourceData(patchEntry.BaseSha1, patchEntry.DeltaSha1);
-
-            if (!m_resourceEntries.TryGetValue(sha1, out CatResourceEntry entry))
-                return null;
-            byte[] buffer = null;
-
-            if (entry.IsEncrypted && !KeyManager.Instance.HasKey(entry.KeyId))
-            {
-                return null;
-            }
-
-            using (NativeReader casReader = new NativeReader(new FileStream(m_casFiles[entry.ArchiveIndex], FileMode.Open, FileAccess.Read)))
-            {
-                using (CasReader reader = new CasReader(casReader.CreateViewStream(entry.Offset, entry.Size),
-                           (entry.IsEncrypted) ? KeyManager.Instance.GetKey(entry.KeyId) : null, entry.EncryptedSize))
-                {
-                    buffer = reader.Read();
-                }
-            }
-
-            return (buffer != null) ? new MemoryStream(buffer) : null;
-        }
-        public Stream GetRawResourceData(Sha1 sha1)
-        {
-            if (!m_resourceEntries.TryGetValue(sha1, out CatResourceEntry entry))
-                return null;
-            byte[] buffer = null;
-
-            if (entry.IsEncrypted && !KeyManager.Instance.HasKey(entry.KeyId))
-            {
-                return null;
-            }
-
-            using (NativeReader casReader = new NativeReader(new FileStream(m_casFiles[entry.ArchiveIndex], FileMode.Open, FileAccess.Read)))
-            {
-                using (NativeReader reader = new NativeReader(casReader.CreateViewStream(entry.Offset, entry.Size)))
-                {
-                    buffer = reader.ReadToEnd();
-                }
-            }
-
-            return (buffer != null) ? new MemoryStream(buffer) : null;
-        }
-
-        // patched data from cas
-        public Stream GetResourceData(Sha1 baseSha1, Sha1 deltaSha1)
-        {
-            if (!m_resourceEntries.TryGetValue(baseSha1, out CatResourceEntry baseEntry) || !m_resourceEntries.TryGetValue(deltaSha1, out CatResourceEntry deltaEntry))
-                return null;
-
-            byte[] buffer = null;
-            using (NativeReader baseReader = new NativeReader(new FileStream(m_casFiles[baseEntry.ArchiveIndex], FileMode.Open, FileAccess.Read)))
-            {
-                using (NativeReader deltaReader = (deltaEntry.ArchiveIndex == baseEntry.ArchiveIndex) ? baseReader : new NativeReader(new FileStream(m_casFiles[deltaEntry.ArchiveIndex], FileMode.Open, FileAccess.Read)))
-                {
-                    byte[] baseKey = (baseEntry.IsEncrypted && KeyManager.Instance.HasKey(baseEntry.KeyId)) ? KeyManager.Instance.GetKey(baseEntry.KeyId) : null;
-                    byte[] deltaKey = (deltaEntry.IsEncrypted && KeyManager.Instance.HasKey(deltaEntry.KeyId)) ? KeyManager.Instance.GetKey(deltaEntry.KeyId) : null;
-
-                    if (baseEntry.IsEncrypted && baseKey == null || deltaEntry.IsEncrypted && deltaKey == null)
-                    {
-                        return null;
-                    }
-
-                    using (CasReader reader =
-                           new CasReader(baseReader.CreateViewStream(baseEntry.Offset, baseEntry.Size), baseKey,
-                               baseEntry.EncryptedSize,
-                               deltaReader.CreateViewStream(deltaEntry.Offset, deltaEntry.Size), deltaKey,
-                               deltaEntry.EncryptedSize))
-                    {
-                        buffer = reader.Read();
-                    }
-                }
-            }
-
-            return (buffer != null) ? new MemoryStream(buffer) : null;
-        }
-
-        // unpatched data from binary superbundle
-        public Stream GetResourceData(string superBundleName, long offset, long size)
-        {
-            NativeReader bufferReader = GetOrOpenReader(m_fileSystem.ResolvePath(superBundleName));
-            byte[] buffer;
-            lock (bufferReader)
-            {
-                using (CasReader reader = new CasReader(bufferReader.CreateViewStream(offset, size)))
-                    buffer = reader.Read();
-            }
-            return buffer != null ? new MemoryStream(buffer) : null;
-        }
-        public Stream GetRawResourceData(string superBundleName, long offset, long size)
-        {
-            NativeReader bufferReader = GetOrOpenReader(m_fileSystem.ResolvePath(superBundleName));
-            byte[] buffer;
-            lock (bufferReader)
-            {
-                using (NativeReader reader = new NativeReader(bufferReader.CreateViewStream(offset, size)))
-                    buffer = reader.ReadToEnd();
-            }
-            return buffer != null ? new MemoryStream(buffer) : null;
-        }
-
-        // patched data from binary superbundle (stored in cache)
-        public Stream GetResourceData(long offset, long size)
-        {
-            byte[] buffer;
-            lock (m_sbdataLock)
-            {
-                if (m_sbdataReader == null)
-                    m_sbdataReader = new NativeReader(new FileStream(m_fileSystem.CacheName + "_sbdata.cas", FileMode.Open, FileAccess.Read, FileShare.Read));
-                using (CasReader reader = new CasReader(m_sbdataReader.CreateViewStream(offset, size)))
-                    buffer = reader.Read();
-            }
-            return buffer != null ? new MemoryStream(buffer) : null;
-        }
-        public Stream GetRawResourceData(long offset, long size)
-        {
-            byte[] buffer;
-            lock (m_sbdataLock)
-            {
-                if (m_sbdataReader == null)
-                    m_sbdataReader = new NativeReader(new FileStream(m_fileSystem.CacheName + "_sbdata.cas", FileMode.Open, FileAccess.Read, FileShare.Read));
-                using (NativeReader reader = new NativeReader(m_sbdataReader.CreateViewStream(offset, size)))
-                    buffer = reader.ReadToEnd();
-            }
-            return buffer != null ? new MemoryStream(buffer) : null;
-        }
-
-        // data from buffer (ie. modified or inline data)
-        public Stream GetResourceData(byte[] buffer)
-        {
-            byte[] outBuffer = null;
-            using (MemoryStream ms = new MemoryStream(buffer))
-            {
-                using (CasReader reader = new CasReader(ms))
-                {
-                    outBuffer = reader.Read();
-                }
-            }
-
-            return (outBuffer != null) ? new MemoryStream(outBuffer) : null;
-        }
-
-        public Sha1 GetBaseSha1(Sha1 sha1) => m_patchEntries.TryGetValue(sha1, out CatPatchEntry entry) ? entry.BaseSha1 : sha1;
-
-        public bool IsEncrypted(Sha1 sha1)
-        {
-            if (m_resourceEntries.TryGetValue(sha1, out CatResourceEntry resEntry) && resEntry.IsEncrypted)
-                return true;
-
-            if (m_patchEntries.TryGetValue(sha1, out CatPatchEntry patchEntry))
-            {
-                if (m_resourceEntries.TryGetValue(patchEntry.BaseSha1, out CatResourceEntry baseEntry) && baseEntry.IsEncrypted)
-                    return true;
-
-                if (m_resourceEntries.TryGetValue(patchEntry.DeltaSha1, out CatResourceEntry deltaEntry) && deltaEntry.IsEncrypted)
-                    return true;
-            }
-
+            FrostyLogger.Logger?.LogError("FileSystemManager not initialized yet");
             return false;
         }
 
-        public void SetLogger(ILogger inLogger) => m_logger = inLogger;
-
-        public void ClearLogger() => m_logger = null;
-
-        private NativeReader GetOrOpenReader(string resolvedPath)
+        if (FileSystemManager.HasFileInMemoryFs("Scripts/CasEncrypt.yaml"))
         {
-            lock (m_readerCacheLock)
+            // load CasEncrypt.yaml from memoryFs (used for decrypting data in cas files)
+            using (TextReader stream = new StreamReader(FileSystemManager.GetFileFromMemoryFs("Scripts/CasEncrypt.yaml").ToStream()))
             {
-                if (!m_openReaders.TryGetValue(resolvedPath, out NativeReader reader))
+                byte[]? key = null;
+                while (stream.Peek() != -1)
                 {
-                    reader = new NativeReader(new FileStream(resolvedPath, FileMode.Open, FileAccess.Read, FileShare.Read));
-                    m_openReaders[resolvedPath] = reader;
-                }
-                return reader;
-            }
-        }
-
-        // adds catalog entires to manager
-        private void LoadCatalog(string filename)
-        {
-            string fullPath = m_fileSystem.ResolvePath(filename);
-            if (!File.Exists(fullPath))
-            {
-                return;
-            }
-
-            using (CatReader reader = new CatReader(new FileStream(fullPath, FileMode.Open, FileAccess.Read), m_fileSystem.CreateDeobfuscator()))
-            {
-                for (int i = 0; i < reader.ResourceCount; i++)
-                {
-                    CatResourceEntry entry = reader.ReadResourceEntry();
-                    entry.ArchiveIndex = AddCas(filename, entry.ArchiveIndex);
-
-                    if (entry.LogicalOffset == 0 && !m_resourceEntries.ContainsKey(entry.Sha1))
+                    string line = stream.ReadLine()!;
+                    if (line.Contains("keyid:"))
                     {
-                        m_resourceEntries.Add(entry.Sha1, entry);
+                        string[] arr = line.Split(':');
+                        KeyManager.AddKey(arr[1].Trim(), key!);
                     }
-                }
-
-                for (int i = 0; i < reader.EncryptedCount; i++)
-                {
-                    CatResourceEntry entry = reader.ReadEncryptedEntry();
-                    entry.ArchiveIndex = AddCas(filename, entry.ArchiveIndex);
-
-                    if (entry.LogicalOffset == 0 && !m_resourceEntries.ContainsKey(entry.Sha1))
+                    else if (line.Contains("key:"))
                     {
-                        m_resourceEntries.Add(entry.Sha1, entry);
-                    }
-                }
+                        string[] arr = line.Split(':');
+                        string keyStr = arr[1].Trim();
 
-                for (int i = 0; i < reader.PatchCount; i++)
-                {
-                    CatPatchEntry entry = reader.ReadPatchEntry();
-                    if (!m_patchEntries.ContainsKey(entry.Sha1))
-                    {
-                        m_patchEntries.Add(entry.Sha1, entry);
-                    }
-                }
-            }
-        }
-
-        private void LoadDas()
-        {
-            string dasDalPath = m_fileSystem.ResolvePath("das.dal");
-            List<Tuple<string, int>> dasFiles = new List<Tuple<string, int>>();
-
-            using (NativeReader reader = new NativeReader(new FileStream(dasDalPath, FileMode.Open, FileAccess.Read)))
-            {
-                int numFiles = reader.ReadByte();
-                for (int i = 0; i < numFiles; i++)
-                {
-                    string filename = reader.ReadSizedString(0x40);
-                    int numEntries = reader.ReadInt();
-
-                    string dasPath = m_fileSystem.ResolvePath("das_" + filename + ".das");
-                    int hash = Fnv1.HashString(dasPath);
-                    m_casFiles.Add(i, dasPath);
-
-                    using (NativeReader dasReader = new NativeReader(new FileStream(dasPath, FileMode.Open, FileAccess.Read)))
-                    {
-                        long runningOffset = numEntries * 0x18;
-                        for (int j = 0; j < numEntries; j++)
+                        key = new byte[keyStr.Length / 2];
+                        for (int i = 0; i < keyStr.Length / 2; i++)
                         {
-                            Sha1 sha1 = dasReader.ReadSha1();
-                            uint size = dasReader.ReadUInt();
-                            long offset = runningOffset;
-
-                            runningOffset += size;
-                            CatResourceEntry entry = new CatResourceEntry()
-                            {
-                                Sha1 = sha1,
-                                Offset = (uint)offset,
-                                Size = size,
-                                ArchiveIndex = m_casFiles.Count - 1
-                            };
-                            m_resourceEntries.Add(sha1, entry);
+                            key[i] = Convert.ToByte(keyStr.Substring(i * 2, 2), 16);
                         }
                     }
                 }
             }
         }
 
-        // adds a cas file to the manager
-        private int AddCas(string catPath, int archiveIndex)
+        // get oodle libs from unreal
+        /*if (Directory.EnumerateFiles(FileSystemManager.BasePath, "oo2core_*").Any())
         {
-            string casFilename = catPath.Substring(0, catPath.Length - 7) + "cas_" + archiveIndex.ToString("d2") + ".cas";
-            int hash = Fnv1.HashString(casFilename);
-
-            if (!m_casFiles.ContainsKey(hash))
+            string oodleSo = Path.Combine(Utils.Utils.BaseDirectory, "ThirdParty", "liboo2core.so");
+            string oodleDll = Path.Combine(Utils.Utils.BaseDirectory, "ThirdParty", "liboo2core.dll");
+            if (!File.Exists(oodleSo) || !File.Exists(oodleDll))
             {
-                m_casFiles.Add(hash, m_fileSystem.ResolvePath(casFilename));
-            }
+                GitHubClient client = new(new ProductHeaderValue("Frosty"));
 
-            return hash;
+                // Get the latest release
+                Release? release = client.Repository.Release.Get("WorkingRobot", "OodleUE", "2024-11-01-726").Result;
+
+                if (release is null)
+                {
+                    FrostyLogger.Logger?.LogError(
+                        "Failed to get oodle release, grab oodle 2.9.13 or equivalent from unreal engine");
+                    return false;
+                }
+
+                ReleaseAsset? msvc = release.Assets.FirstOrDefault(a => a.Name == "msvc.zip");
+                ReleaseAsset? gcc = release.Assets.FirstOrDefault(a => a.Name == "gcc.zip");
+
+                if (msvc is null || gcc is null)
+                {
+                    FrostyLogger.Logger?.LogError("Failed to find oodle");
+                    return false;
+                }
+
+                using HttpClient httpClient = new();
+                Stream msvcStream = httpClient.GetStreamAsync(msvc.BrowserDownloadUrl).Result;
+                Stream gccStream = httpClient.GetStreamAsync(gcc.BrowserDownloadUrl).Result;
+
+                using ZipArchive msvcArchive = new(msvcStream, ZipArchiveMode.Read);
+                ZipArchiveEntry? dll = msvcArchive.GetEntry("bin/Release/oodle-data-shared.dll");
+                using ZipArchive gccArchive = new(gccStream, ZipArchiveMode.Read);
+                ZipArchiveEntry? so = gccArchive.GetEntry("lib/Release/liboodle-data-shared.so");
+                if (dll is null || so is null)
+                {
+                    FrostyLogger.Logger?.LogError("Failed to get extract oodle");
+                    return false;
+                }
+
+                using Stream stream = dll.Open();
+                using FileStream dllStream = File.Create(oodleDll);
+                stream.CopyTo(dllStream);
+                using Stream stream2 = so.Open();
+                using FileStream soStream = File.Create(oodleSo);
+                stream2.CopyTo(soStream);
+            }
+        }*/
+
+        IsInitialized = true;
+        return true;
+    }
+
+    public static long GetSize(Sha1 sha1)
+    {
+        return s_sizeMap.TryGetValue(sha1, out uint size) ? size : -1;
+    }
+
+    public static CasFileInfo? GetPatchFileInfo(Sha1 sha1, Sha1 deltaSha1, Sha1 baseSha1)
+    {
+        if (s_resourceEntries.TryGetValue(sha1, out CasFileInfo? fileInfo))
+        {
+            return fileInfo;
         }
 
-        private void WriteToLog(string text, params object[] vars) => m_logger?.Log(text, vars);
+        CasFileInfo? baseInfo = s_resourceEntries.GetValueOrDefault(baseSha1);
+        CasFileInfo? deltaInfo = s_resourceEntries.GetValueOrDefault(deltaSha1);
+
+        if (baseInfo is null || deltaInfo is null)
+        {
+            return null;
+        }
+
+        fileInfo = new CasFileInfo(baseInfo.GetBase(), deltaInfo.GetBase());
+
+        s_resourceEntries.TryAdd(sha1, fileInfo);
+
+        return fileInfo;
+    }
+
+    public static CasFileInfo? GetFileInfo(Sha1 sha1)
+    {
+        return s_resourceEntries.GetValueOrDefault(sha1);
+    }
+
+    private static void LoadInstallChunk(InstallChunkInfo info)
+    {
+        Dictionary<Sha1, CasFileInfo> infos = new();
+        foreach (FileSystemSource source in FileSystemManager.Sources)
+        {
+            LoadEntries(info, source, infos);
+        }
+
+        foreach (CatPatchEntry entry in s_patchEntries)
+        {
+            infos.TryGetValue(entry.BaseSha1, out CasFileInfo? baseFileInfo);
+
+            infos.TryGetValue(entry.DeltaSha1, out CasFileInfo? deltaFileInfo);
+
+            Debug.Assert(deltaFileInfo is not null, "No delta entry!");
+
+            CasFileInfo fileInfo = new(baseFileInfo?.GetBase(), deltaFileInfo?.GetBase());
+            s_resourceEntries.TryAdd(entry.Sha1, fileInfo);
+        }
+        s_patchEntries.Clear();
+    }
+
+    private static void LoadEntries(InstallChunkInfo info, FileSystemSource inSource,
+        Dictionary<Sha1, CasFileInfo> retVal)
+    {
+        if (!inSource.TryResolvePath(Path.Combine(info.InstallBundle, "cas.cat"), out string? filePath))
+        {
+            return;
+        }
+
+        uint installChunkIndex = FileSystemManager.GetInstallChunkIndex(info);
+        bool patch = inSource.Path == FileSystemSource.Patch.Path;
+
+        using (CatStream stream = new(filePath))
+        {
+            for (int i = 0; i < stream.ResourceCount; i++)
+            {
+                CatResourceEntry entry = stream.ReadResourceEntry();
+                CasFileIdentifier casFileIdentifier = new(patch, installChunkIndex, entry.ArchiveIndex);
+
+                CasFileInfo fileInfo = new(casFileIdentifier, entry.Offset, entry.Size, entry.LogicalOffset);
+
+                if (!s_resourceEntries.TryAdd(entry.Sha1, fileInfo) && fileInfo.IsComplete() && !s_resourceEntries[entry.Sha1].IsComplete())
+                {
+                    s_resourceEntries[entry.Sha1] = fileInfo;
+                }
+
+                if (!s_sizeMap.TryAdd(entry.Sha1, entry.Size))
+                {
+                    s_sizeMap[entry.Sha1] = Math.Max(s_sizeMap[entry.Sha1], entry.Size);
+                }
+
+                retVal.TryAdd(entry.Sha1, fileInfo);
+            }
+
+            for (int i = 0; i < stream.EncryptedCount; i++)
+            {
+                CatResourceEntry entry = stream.ReadEncryptedEntry();
+                CasFileIdentifier casFileIdentifier = new(patch, installChunkIndex, entry.ArchiveIndex);
+
+                CasFileInfo fileInfo = new(casFileIdentifier, entry.Offset, entry.Size, entry.LogicalOffset,
+                    entry.KeyId);
+
+                if (!s_resourceEntries.TryAdd(entry.Sha1, fileInfo) && fileInfo.IsComplete() && !s_resourceEntries[entry.Sha1].IsComplete())
+                {
+                    s_resourceEntries[entry.Sha1] = fileInfo;
+                }
+
+                if (!s_sizeMap.TryAdd(entry.Sha1, entry.Size))
+                {
+                    s_sizeMap[entry.Sha1] = Math.Max(s_sizeMap[entry.Sha1], entry.Size);
+                }
+
+                retVal.TryAdd(entry.Sha1, fileInfo);
+            }
+
+            for (int i = 0; i < stream.PatchCount; i++)
+            {
+                CatPatchEntry entry = stream.ReadPatchEntry();
+                s_patchEntries.Add(entry);
+            }
+        }
     }
 }

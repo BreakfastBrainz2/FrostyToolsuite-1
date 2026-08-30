@@ -1,5 +1,6 @@
 ﻿using FrostySdk.Attributes;
 using FrostySdk.Ebx;
+using FrostySdk.Managers;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -61,15 +62,15 @@ namespace FrostySdk.IO
             }
         }
 
-        internal EbxReaderV2(Stream inStream, bool passthru) : base(inStream, passthru) { }
+        internal EbxReaderV2(Stream inStream) : base(inStream, true) { }
 
-        public EbxReaderV2(Stream InStream, FileSystemManager fs, bool inPatched) : base(InStream, true)
+        public EbxReaderV2(Stream InStream, bool inPatched) : base(InStream, true)
         {
-            if (std == null && fs.HasFileInMemoryFs("SharedTypeDescriptors.ebx"))
+            if (std == null && FileSystemManager.HasFileInMemoryFs("SharedTypeDescriptors.ebx"))
             {
-                std = new EbxSharedTypeDescriptors(fs, "SharedTypeDescriptors.ebx");
-                if (fs.HasFileInMemoryFs("SharedTypeDescriptors_patch.ebx"))
-                    patchStd = new EbxSharedTypeDescriptors(fs, "SharedTypeDescriptors_patch.ebx");
+                std = new EbxSharedTypeDescriptors("SharedTypeDescriptors.ebx");
+                if (FileSystemManager.HasFileInMemoryFs("SharedTypeDescriptors_patch.ebx"))
+                    patchStd = new EbxSharedTypeDescriptors("SharedTypeDescriptors_patch.ebx");
             }
 
             patched = inPatched;

@@ -108,9 +108,9 @@ namespace FrostySdk.Resources
         {
         }
 
-        public override void Read(NativeReader reader, AssetManager am, ResAssetEntry entry, ModifiedResource modifiedData)
+        public override void Read(NativeReader reader, ResAssetEntry entry, ModifiedResource modifiedData)
         {
-            base.Read(reader, am, entry, modifiedData);
+            base.Read(reader, entry, modifiedData);
             
             //using (FileStream fileStream = new FileStream(@"E:/" + entry.Filename, FileMode.Create, FileAccess.Write))
             //{
@@ -238,7 +238,7 @@ namespace FrostySdk.Resources
             //Debug.Assert(reader.Position == reader.Length);
 #endif
 
-            Data = am.GetChunk(am.GetChunkEntry(m_chunkId));
+            Data = AssetManager.GetAsset(AssetManager.GetChunkEntry(m_chunkId));
         }
 
         public override byte[] SaveBytes()
