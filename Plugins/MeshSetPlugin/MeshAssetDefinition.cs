@@ -146,16 +146,32 @@ namespace MeshSetPlugin
             MeshSet meshSet = App.AssetManager.GetResAs<MeshSet>(rEntry);
 
             // get skeleton (if required)
-            string skeleton = "";
+            dynamic skeletonAsset = null;
             if (meshSet.Type == MeshType.MeshType_Skinned)
             {
-                skeleton = ((SkinnedMeshExportSettings)settings).SkeletonAsset;
+                string skeleton = ((SkinnedMeshExportSettings)settings).SkeletonAsset;
+                skeletonAsset = App.AssetManager.GetEbx(App.AssetManager.GetEbxEntry(skeleton)).RootObject;
             }
+
+
+            MeshExportParams exportParams = new()
+            {
+                MeshAsset = meshAsset,
+                Filename = path,
+                Scale = settings.Scale,
+                FlattenHierarchy = settings.FlattenHierarchy,
+                ExportSingleLod = settings.ExportSingleLod,
+                ExportNonRenderable = settings.ExportNonRenderable,
+                SkeletonAsset = skeletonAsset,
+                MeshSets = [meshSet]
+            };
 
             FrostyTaskWindow.Show("Exporting MeshSet", "", (task) =>
             {
-                FBXExporter exporter = new FBXExporter(task);
-                exporter.ExportFBX(meshAsset, path, settings.Version.ToString().Replace("FBX_", ""), settings.Scale.ToString(), settings.FlattenHierarchy, settings.ExportSingleLod, settings.ExportNonRenderable, skeleton, (filterType == "fbx") ? "binary" : "obj", meshSet);
+                MeshExporter exporter = new(task);
+                exporter.ExportGLB(exportParams);
+                //FBXExporter exporter = new FBXExporter(task);
+                //exporter.ExportFBX(meshAsset, path, settings.Version.ToString().Replace("FBX_", ""), settings.Scale.ToString(), settings.FlattenHierarchy, settings.ExportSingleLod, settings.ExportNonRenderable, skeleton, (filterType == "fbx") ? "binary" : "obj", meshSet);
             });
         }
 

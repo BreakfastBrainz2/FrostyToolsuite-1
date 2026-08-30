@@ -1,4 +1,5 @@
-﻿using Frosty.Controls;
+﻿using Assimp;
+using Frosty.Controls;
 using Frosty.Core;
 using Frosty.Core.Controls;
 using Frosty.Core.Controls.Editors;
@@ -1501,18 +1502,16 @@ public class FrostyMeshSetEditor : FrostyAssetEditor
         // show settings box
         if (FrostyImportExportBox.Show<MeshExportSettings>("Mesh Export Settings", FrostyImportExportType.Export, settings) == MessageBoxResult.OK)
         {
-            string filter = "*.fbx (FBX Binary File)|*.fbx|*.fbx (FBX ASCII File)|*.fbx";
-            if (!(settings is SkinnedMeshExportSettings) || ((SkinnedMeshExportSettings)settings).SkeletonAsset == "")
-            {
-                filter += "|*.obj (OBJ File)|*.obj";
-            }
+            string filter = "*.glb (FBX Binary File)|*.glb";
 
             FrostySaveFileDialog sfd = new FrostySaveFileDialog("Save MeshSet", filter, "Mesh", AssetEntry.Filename);
             if (sfd.ShowDialog())
             {
+                dynamic skeletonAsset = null;
                 if (m_meshSet.Type == MeshType.MeshType_Skinned)
                 {
                     skeleton = ((SkinnedMeshExportSettings)settings).SkeletonAsset;
+                    skeletonAsset = App.AssetManager.GetEbx(App.AssetManager.GetEbxEntry(skeleton)).RootObject;
                 }
 
                 EbxAssetEntry entry = App.AssetManager.GetEbxEntry(((dynamic)RootObject).Name);
@@ -1528,14 +1527,28 @@ public class FrostyMeshSetEditor : FrostyAssetEditor
                     }
                 }
 
+                MeshExportParams exportParams = new()
+                {
+                    MeshAsset = RootObject,
+                    Filename = sfd.FileName,
+                    Scale = settings.Scale,
+                    FlattenHierarchy = settings.FlattenHierarchy,
+                    ExportSingleLod = settings.ExportSingleLod,
+                    ExportNonRenderable = settings.ExportNonRenderable,
+                    SkeletonAsset = skeletonAsset,
+                    MeshSets = meshSets.ToArray()
+                };
+
                 // fbx/obj exporting
                 string[] fileTypes = new string[] { "binary", "ascii", "obj" };
                 FrostyTaskWindow.Show("Exporting MeshSet", "", (task) =>
                 {
-                    FBXExporter exporter = new FBXExporter(task);
-                    exporter.ExportFBX(RootObject, sfd.FileName, settings.Version.ToString().Replace("FBX_", ""), settings.Scale.ToString(), settings.FlattenHierarchy, settings.ExportSingleLod, settings.ExportNonRenderable, skeleton, fileTypes[sfd.FilterIndex - 1], meshSets.ToArray());
+                    MeshExporter exporter = new(task);
+                    exporter.ExportGLB(exportParams);
+                    //FBXExporter exporter = new FBXExporter(task);
+                    //exporter.ExportFBX(RootObject, sfd.FileName, settings.Version.ToString().Replace("FBX_", ""), settings.Scale.ToString(), settings.FlattenHierarchy, settings.ExportSingleLod, settings.ExportNonRenderable, skeleton, fileTypes[sfd.FilterIndex - 1], meshSets.ToArray());
                 });
-
+                   
                 logger.Log("Exported {0} to {1}", entry.Name, sfd.FileName);
 
                 // save settings
