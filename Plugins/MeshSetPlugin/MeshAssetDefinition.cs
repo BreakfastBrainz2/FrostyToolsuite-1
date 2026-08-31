@@ -169,7 +169,7 @@ namespace MeshSetPlugin
             FrostyTaskWindow.Show("Exporting MeshSet", "", (task) =>
             {
                 MeshExporter exporter = new(task);
-                exporter.ExportGLB(exportParams);
+                exporter.Export(exportParams);
                 //FBXExporter exporter = new FBXExporter(task);
                 //exporter.ExportFBX(meshAsset, path, settings.Version.ToString().Replace("FBX_", ""), settings.Scale.ToString(), settings.FlattenHierarchy, settings.ExportSingleLod, settings.ExportNonRenderable, skeleton, (filterType == "fbx") ? "binary" : "obj", meshSet);
             });

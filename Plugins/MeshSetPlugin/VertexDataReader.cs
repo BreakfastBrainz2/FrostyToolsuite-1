@@ -77,6 +77,30 @@ public class VertexDataReader
         return new Vector4(x, y, z, w);
     }
 
+    static ushort[] ReadUShort4(byte[] data, int offset)
+    {
+        ushort[] values = new ushort[4];
+
+        values[0] = BitConverter.ToUInt16(data, offset + 0);
+        values[1] = BitConverter.ToUInt16(data, offset + 2);
+        values[2] = BitConverter.ToUInt16(data, offset + 4);
+        values[3] = BitConverter.ToUInt16(data, offset + 6);
+
+        return values;
+    }
+
+    static ushort[] ReadByte4AsUShort4(byte[] data, int offset)
+    {
+        ushort[] values = new ushort[4];
+
+        values[0] = data[offset + 0];
+        values[1] = data[offset + 1];
+        values[2] = data[offset + 2];
+        values[3] = data[offset + 3];
+
+        return values;
+    }
+
     public Vector2 ReadVec2(VertexElementFormat format)
     {
         switch (format)
@@ -108,5 +132,35 @@ public class VertexDataReader
             case VertexElementFormat.Float4: return ReadFloat4(m_data, Offset);
             default: throw new InvalidOperationException($"Unhandled format: {format}");
         }
+    }
+
+    public ushort[] ReadByte4AsU16(VertexElementFormat format)
+    {
+        switch(format)
+        {
+            case VertexElementFormat.UByte4: return ReadByte4AsUShort4(m_data, Offset);
+            case VertexElementFormat.UShort4: return ReadUShort4(m_data, Offset);
+            default: throw new InvalidOperationException($"Unhandled format: {format}");
+        }
+    }
+
+    public void ReadBoneIndices(VertexElementFormat format, ushort[] indices, int indexOffset)
+    {
+        ushort[] temp = ReadByte4AsU16(format);
+
+        indices[indexOffset + 0] = temp[0];
+        indices[indexOffset + 1] = temp[1];
+        indices[indexOffset + 2] = temp[2];
+        indices[indexOffset + 3] = temp[3];
+    }
+
+    public void ReadBoneWeights(VertexElementFormat format, float[] weights, int indexOffset)
+    {
+        Vector4 temp = ReadVec4(format);
+
+        weights[indexOffset + 0] = temp[0];
+        weights[indexOffset + 1] = temp[1];
+        weights[indexOffset + 2] = temp[2];
+        weights[indexOffset + 3] = temp[3];
     }
 }

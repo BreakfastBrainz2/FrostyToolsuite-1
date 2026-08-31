@@ -1502,7 +1502,7 @@ public class FrostyMeshSetEditor : FrostyAssetEditor
         // show settings box
         if (FrostyImportExportBox.Show<MeshExportSettings>("Mesh Export Settings", FrostyImportExportType.Export, settings) == MessageBoxResult.OK)
         {
-            string filter = "*.glb (FBX Binary File)|*.glb";
+            string filter = "*.fbx (FBX Binary File)|*.fbx";
 
             FrostySaveFileDialog sfd = new FrostySaveFileDialog("Save MeshSet", filter, "Mesh", AssetEntry.Filename);
             if (sfd.ShowDialog())
@@ -1544,7 +1544,7 @@ public class FrostyMeshSetEditor : FrostyAssetEditor
                 FrostyTaskWindow.Show("Exporting MeshSet", "", (task) =>
                 {
                     MeshExporter exporter = new(task);
-                    exporter.ExportGLB(exportParams);
+                    exporter.Export(exportParams);
                     //FBXExporter exporter = new FBXExporter(task);
                     //exporter.ExportFBX(RootObject, sfd.FileName, settings.Version.ToString().Replace("FBX_", ""), settings.Scale.ToString(), settings.FlattenHierarchy, settings.ExportSingleLod, settings.ExportNonRenderable, skeleton, fileTypes[sfd.FilterIndex - 1], meshSets.ToArray());
                 });
