@@ -19,6 +19,7 @@
     <Project Path="Plugins/BlankPlugin/BlankPlugin.csproj">
       <BuildType Solution="Release|*" Project="Release - Final" />
       <Platform Project="x64" />
+      <Build Project="false" />
     </Project>
     <Project Path="Plugins/BlueprintEditorPlugin/BlueprintEditorPlugin.csproj">
       <BuildType Solution="Release - Alpha|*" Project="Developer - Debug" />
@@ -114,7 +115,19 @@
       <BuildType Solution="Release|*" Project="Release - Final" />
       <Platform Project="x64" />
     </Project>
+    <Project Path="Plugins/RenamePlugin/RenamePlugin.csproj">
+      <BuildType Solution="Release|*" Project="Release - Alpha" />
+      <Platform Project="x64" />
+    </Project>
     <Project Path="Plugins/RootInstanceEntriesPlugin/RootInstanceEntriesPlugin.csproj">
+      <BuildType Solution="Release|*" Project="Release - Alpha" />
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Plugins/ScriptAssetPlugin/ScriptAssetPlugin.csproj">
+      <BuildType Solution="Release|*" Project="Release - Alpha" />
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="Plugins/SkeletonImportFromXmlPlugin/SkeletonImportFromXmlPlugin.csproj">
       <BuildType Solution="Release|*" Project="Release - Alpha" />
       <Platform Project="x64" />
     </Project>

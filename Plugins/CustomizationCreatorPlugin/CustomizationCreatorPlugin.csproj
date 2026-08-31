@@ -3,8 +3,8 @@
     <Configurations>Developer - Debug;Release - Alpha;Release - Beta;Release - Final</Configurations>
     <Platforms>x64</Platforms>
     <TargetFrameworks>net10.0-windows</TargetFrameworks>
-    <AssemblyTitle>BlankPlugin</AssemblyTitle>
-    <Product>BlankPlugin</Product>
+    <AssemblyTitle>CustomizationCreatorPlugin</AssemblyTitle>
+    <Product>CustomizationCreatorPlugin</Product>
     <Copyright>Copyright ©  2020</Copyright>
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

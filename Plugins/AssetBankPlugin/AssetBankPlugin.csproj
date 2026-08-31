@@ -68,7 +68,9 @@
   <ItemGroup>
     <Resource Include="Images\AntStateAssetFileType.png" />
     <Resource Include="Images\Eye.png" />
-    <Resource Include="Images\Instances.png">
+    <Resource Include="Images\Instances.png" />
+	<Resource Include="Images\RigidMeshFileType.png" />
+	<Resource Include="Images\SkinnedMeshFileType.png">
       <CopyToOutputDirectory></CopyToOutputDirectory>
     </Resource>
   </ItemGroup>
@@ -77,8 +79,10 @@
 		<ItemGroup>
 			<PluginFiles Include="$(TargetDir)$(ProjectName).*" />
 		</ItemGroup>
-
 		<Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(SolutionDir)FrostyEditor\$(OutDir)Plugins\" />
-	</Target>
 
+		<Copy SourceFiles="$(ProjectDir)AssImp\assimp.dll;$(ProjectDir)AssImp\AssimpNet.dll"
+			  DestinationFolder="$(SolutionDir)FrostyEditor\$(OutDir)Plugins\" />
+	</Target>
+	
 </Project>
