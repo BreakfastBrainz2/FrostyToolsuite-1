@@ -1,5 +1,6 @@
 ﻿using FrostySdk.IO;
 using System;
+using FrostySdk.Managers.Entries;
 
 namespace FrostySdk.Ebx
 {

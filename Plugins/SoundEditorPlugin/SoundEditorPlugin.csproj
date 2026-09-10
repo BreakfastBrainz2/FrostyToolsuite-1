@@ -67,13 +67,13 @@
     
     <Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(SolutionDir)FrostyEditor\$(OutDir)Plugins\" />
       
-    <Copy SourceFiles="$(PkgNAudio_Core)\lib\netstandard2.0\NAudio.Core.dll" DestinationFolder="@(ThirdPartyFolder)" />
+    <!--<Copy SourceFiles="$(PkgNAudio_Core)\lib\net9.0\NAudio.Core.dll" DestinationFolder="@(ThirdPartyFolder)" />
     <Copy SourceFiles="$(PkgNAudio_WinMM)\lib\netstandard2.0\NAudio.WinMM.dll" DestinationFolder="@(ThirdPartyFolder)" />
     <Copy SourceFiles="$(PkgNAudio_WinForms)\lib\netcoreapp3.1\NAudio.WinForms.dll" DestinationFolder="@(ThirdPartyFolder)" />
-    <Copy SourceFiles="$(PkgNAudio_WaveFormRenderer)\lib\netstandard2.0\NAudio.WaveFormRenderer.dll" DestinationFolder="@(ThirdPartyFolder)" />
-    <Copy SourceFiles="$(PkgNAudio_Wasapi)\lib\netstandard2.0\NAudio.Wasapi.dll" DestinationFolder="@(ThirdPartyFolder)" />
-    <Copy SourceFiles="$(PkgNAudio_Midi)\lib\netstandard2.0\NAudio.Midi.dll" DestinationFolder="@(ThirdPartyFolder)" />
-    <Copy SourceFiles="$(PkgNAudio_Asio)\lib\netstandard2.0\NAudio.Asio.dll" DestinationFolder="@(ThirdPartyFolder)" />
+    <Copy SourceFiles="$(PkgNAudio_WaveFormRenderer)\lib\net9.0\NAudio.WaveFormRenderer.dll" DestinationFolder="@(ThirdPartyFolder)" />
+    <Copy SourceFiles="$(PkgNAudio_Wasapi)\lib\net9.0\NAudio.Wasapi.dll" DestinationFolder="@(ThirdPartyFolder)" />
+    <Copy SourceFiles="$(PkgNAudio_Midi)\lib\net9.0\NAudio.Midi.dll" DestinationFolder="@(ThirdPartyFolder)" />
+    <Copy SourceFiles="$(PkgNAudio_Asio)\lib\net9.0\NAudio.Asio.dll" DestinationFolder="@(ThirdPartyFolder)" />
     <Copy SourceFiles="$(PkgNAudio)\lib\net6.0-windows7.0\NAudio.dll" DestinationFolder="@(ThirdPartyFolder)" />
       
     <Copy SourceFiles="$(PkgSharpGen_Runtime)\lib\net9.0\SharpGen.Runtime.dll" DestinationFolder="@(ThirdPartyFolder)" />
@@ -81,7 +81,7 @@
       
     <Copy SourceFiles="$(PkgVortice_DirectX)\lib\net10.0\Vortice.DirectX.dll" DestinationFolder="@(ThirdPartyFolder)" />
     <Copy SourceFiles="$(PkgVortice_Mathematics)\lib\net10.0\Vortice.Mathematics.dll" DestinationFolder="@(ThirdPartyFolder)" />
-    <Copy SourceFiles="$(PkgVortice_XAudio2)\lib\net10.0\Vortice.XAudio2.dll" DestinationFolder="@(ThirdPartyFolder)" />
+    <Copy SourceFiles="$(PkgVortice_XAudio2)\lib\net10.0\Vortice.XAudio2.dll" DestinationFolder="@(ThirdPartyFolder)" />-->
   </Target>
   
   <ItemGroup>

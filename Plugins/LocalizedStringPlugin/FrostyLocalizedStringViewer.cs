@@ -29,7 +29,7 @@ namespace LocalizedStringPlugin
     class FrostyLocalizedStringViewer : FrostyBaseEditor
     {
         public override ImageSource Icon => LocalizedStringViewerMenuExtension.imageSource;
-        public ILocalizedStringDatabase db => LocalizedStringDatabase.Current;
+        public ILocalizedStringDatabase CurrentDb => LocalizedStringDatabase.Current;
 
         private const string PART_ExportButton = "PART_ExportButton";
         private const string PART_ImportButton = "PART_ImportButton";
@@ -43,6 +43,7 @@ namespace LocalizedStringPlugin
         private const string PART_FilterText = "PART_FilterText";
         private const string PART_FilterStringID = "PART_FilterStringID";
         private const string PART_FilterType = "PART_FilterType";
+        private const string PART_LanguageComboBox = "PART_LanguageComboBox";
         private const string PART_StringIdList = "PART_StringIdList";
 
         private const string PART_UpdateCurrentStringButton = "PART_UpdateCurrentStringButton";
@@ -68,6 +69,7 @@ namespace LocalizedStringPlugin
         private TextBox tbFilterStringID;
         private string CurrentFilterstringID;
         private ComboBox ComboFilterType;
+        private ComboBox ComboLanguageSelector;
         private ListBox stringIdListBox;
         private string ListBoxSelectedString;
 
@@ -142,14 +144,30 @@ namespace LocalizedStringPlugin
             tbLocalizedString.KeyDown += TbLocalizedString_KeyDown;
             tbLocalizedString.TextChanged += TbLocalizedString_TextChanged;
 
+            ComboLanguageSelector = (ComboBox)GetTemplateChild(PART_LanguageComboBox);
+            ComboLanguageSelector.SelectionChanged += LanguageComboBox_SelectionChanged;
+
+            foreach (var lang in CurrentDb.GetLanguages())
+            {
+                ComboLanguageSelector.Items.Add(lang);
+            }
+            
+            ComboLanguageSelector.SelectedItem = Config.Get("Language", "English", ConfigScope.Game);
+            
             Loaded += FrostyLocalizedStringViewer_Loaded;
+        }
+
+        private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            CurrentDb.LoadSpecificLanguage((string)ComboLanguageSelector.SelectedItem);
+            RemakeList();
         }
 
         private void Refresh_Click(object sender, RoutedEventArgs e)
         {
             FrostyTaskWindow.Show("Loading strings", "", (task) =>
             {
-                stringIds = db.EnumerateStrings().Distinct().ToList();
+                stringIds = CurrentDb.EnumerateStrings().Distinct().ToList();
                 stringIds.Sort();
             });
 
@@ -168,9 +186,9 @@ namespace LocalizedStringPlugin
             int Unfilteredidx = stringIDListUnfiltered.IndexOf((string)stringIdListBox.SelectedItem);
             int selected = stringIdListBox.SelectedIndex;
             uint stringId = stringIds[Unfilteredidx];
-            db.RevertString(stringId);
-            stringIDListUnfiltered[Unfilteredidx] = stringId.ToString("X8") + " - " + db.GetString(stringId);
-            stringIdListBox.Items[selected] = stringId.ToString("X8") + " - " + db.GetString(stringId);
+            CurrentDb.RevertString(stringId);
+            stringIDListUnfiltered[Unfilteredidx] = stringId.ToString("X8") + " - " + CurrentDb.GetString(stringId);
+            stringIdListBox.Items[selected] = stringId.ToString("X8") + " - " + CurrentDb.GetString(stringId);
             if (ComboFilterType.SelectedIndex == 1)
             {
                 stringIdListBox.Items.RemoveAt(selected);
@@ -200,7 +218,7 @@ namespace LocalizedStringPlugin
         {
             if (stringIdListBox.SelectedItem != null)
             {
-                if (tbLocalizedString.Text != db.GetString(stringIds[stringIDListUnfiltered.IndexOf(ListBoxSelectedString)]))
+                if (tbLocalizedString.Text != CurrentDb.GetString(stringIds[stringIDListUnfiltered.IndexOf(ListBoxSelectedString)]))
                 {
                     btnUpdateCurrentString.IsEnabled = true;
                 }
@@ -216,7 +234,7 @@ namespace LocalizedStringPlugin
             if (StringToCopy != null)
             {
                 tbLocalizedString.Text = StringToCopy;
-                if (tbLocalizedString.Text != db.GetString(stringIds[stringIDListUnfiltered.IndexOf(ListBoxSelectedString)]))
+                if (tbLocalizedString.Text != CurrentDb.GetString(stringIds[stringIDListUnfiltered.IndexOf(ListBoxSelectedString)]))
                 {
                     btnUpdateCurrentString.IsEnabled = true;
                 }
@@ -247,9 +265,9 @@ namespace LocalizedStringPlugin
                 int Unfilteredidx = stringIDListUnfiltered.IndexOf((string)stringIdListBox.SelectedItem);
                 int selected = stringIdListBox.SelectedIndex;
                 uint stringId = stringIds[Unfilteredidx];
-                db.SetString(stringId, tbLocalizedString.Text);
-                stringIDListUnfiltered[Unfilteredidx] = stringId.ToString("X8") + " - " + db.GetString(stringId);
-                stringIdListBox.Items[selected] = stringId.ToString("X8") + " - " + db.GetString(stringId);
+                CurrentDb.SetString(stringId, tbLocalizedString.Text);
+                stringIDListUnfiltered[Unfilteredidx] = stringId.ToString("X8") + " - " + CurrentDb.GetString(stringId);
+                stringIdListBox.Items[selected] = stringId.ToString("X8") + " - " + CurrentDb.GetString(stringId);
                 if (ComboFilterType.SelectedIndex == 2)
                 {
                     stringIdListBox.Items.RemoveAt(selected);
@@ -267,15 +285,15 @@ namespace LocalizedStringPlugin
 
         private void PART_BulkReplaceButton_Click(object sender, RoutedEventArgs e)
         {
-            db.BulkReplaceWindow();
+            CurrentDb.BulkReplaceWindow();
             FillStringIDs(stringIds);
             RemakeList();
         }
 
         private void BtnAddString_Click(object sender, RoutedEventArgs e)
         {
-            db.AddStringWindow();
-            foreach (uint stringid in db.EnumerateStrings())
+            CurrentDb.AddStringWindow();
+            foreach (uint stringid in CurrentDb.EnumerateStrings())
             {
                 if (!stringIds.Contains(stringid))
                 {
@@ -297,7 +315,7 @@ namespace LocalizedStringPlugin
             {
                 FrostyTaskWindow.Show("Loading strings", "", (task) =>
                 {
-                    stringIds = db.EnumerateStrings().Distinct().ToList();
+                    stringIds = CurrentDb.EnumerateStrings().Distinct().ToList();
                     stringIds.Sort();
                 });
                 firstTimeLoad = false;
@@ -319,8 +337,8 @@ namespace LocalizedStringPlugin
             stringIDListUnfiltered.Clear();
             foreach (uint stringId in stringIds)
             {
-                stringIdListBox.Items.Add(stringId.ToString("X8") + " - " + db.GetString(stringId));
-                stringIDListUnfiltered.Add(stringId.ToString("X8") + " - " + db.GetString(stringId));
+                stringIdListBox.Items.Add(stringId.ToString("X8") + " - " + CurrentDb.GetString(stringId));
+                stringIDListUnfiltered.Add(stringId.ToString("X8") + " - " + CurrentDb.GetString(stringId));
             }
         }
 
@@ -340,7 +358,7 @@ namespace LocalizedStringPlugin
                 }
                 ListBoxSelectedString = ((string)stringIdListBox.SelectedItem);
                 uint stringID = stringIds[stringIDListUnfiltered.IndexOf(ListBoxSelectedString)];
-                if (db.isStringEdited(stringID))
+                if (CurrentDb.isStringEdited(stringID))
                 {
                     btnRemoveString.IsEnabled = true;
                 }
@@ -366,7 +384,7 @@ namespace LocalizedStringPlugin
 
             if (stringText.StartsWith("id_"))
             {
-                tbLocalizedString.Text = db.GetString(stringText);
+                tbLocalizedString.Text = CurrentDb.GetString(stringText);
                 tbLocalizedStringHash.Text = stringText;
                 return;
             }
@@ -379,7 +397,7 @@ namespace LocalizedStringPlugin
                 return;
             }
             tbLocalizedStringHash.Text = value.ToString("X8");
-            tbLocalizedString.Text = db.GetString(value);
+            tbLocalizedString.Text = CurrentDb.GetString(value);
         }
 
         private void btnBack_Click(object sender, RoutedEventArgs e)
@@ -450,20 +468,17 @@ namespace LocalizedStringPlugin
             btnCopyString.IsEnabled = false;
             btnPasteString.IsEnabled = false;
             btnUpdateCurrentString.IsEnabled = false;
+            
             CurrentFilterstringID = "";
             CurrentFilterText = "";
+            
             stringIds.Clear();
-            if (ComboFilterType.SelectedIndex == 0)
+            switch (ComboFilterType.SelectedIndex)
             {
-                stringIds = db.EnumerateStrings().Distinct().ToList();
-            }
-            else if (ComboFilterType.SelectedIndex == 1)
-            {
-                stringIds = db.EnumerateModifiedStrings().Distinct().ToList();
-            }
-            else if (ComboFilterType.SelectedIndex == 2)
-            {
-                stringIds = db.EnumerateStrings().Distinct().Except(db.EnumerateModifiedStrings().Distinct().ToList()).ToList();
+                case 0: stringIds = CurrentDb.EnumerateStrings().Distinct().ToList(); break;
+                case 1: stringIds = CurrentDb.EnumerateModifiedStrings().Distinct().ToList(); break;
+                case 2: stringIds = CurrentDb.EnumerateStrings().Distinct().Except(CurrentDb.EnumerateModifiedStrings().Distinct().ToList()).ToList();
+                    break;
             }
             stringIds.Sort();
             FillStringIDs(stringIds);
@@ -491,7 +506,7 @@ namespace LocalizedStringPlugin
                         int index = 0;
                         foreach (uint stringId in stringIds)
                         {
-                            string str = db.GetString(stringId);
+                            string str = CurrentDb.GetString(stringId);
 
                             str = str.Replace("\r", "");
                             str = str.Replace("\n", " ");
@@ -523,14 +538,14 @@ namespace LocalizedStringPlugin
                             string line = reader.ReadLine();
                             uint hash = uint.Parse(line.Substring(0, 8), System.Globalization.NumberStyles.HexNumber);
                             string s = line.Substring(10, line.Length - 11);
-                            if (stringIds.Contains(hash) && s != db.GetString(hash))
+                            if (stringIds.Contains(hash) && s != CurrentDb.GetString(hash))
                             {
-                                db.SetString(hash, s);
+                                CurrentDb.SetString(hash, s);
                                 modified++;
                             }
                             else
                             {
-                                db.SetString(hash, s);
+                                CurrentDb.SetString(hash, s);
                                 added++;
                             }
                         }
@@ -563,7 +578,7 @@ namespace LocalizedStringPlugin
                         string hexStringId = stringId.ToString("X");
                         StringBuilder sb = new StringBuilder(hexStringId);
                         sb.Append(", \"")
-                            .Append(db.GetString(stringId)
+                            .Append(CurrentDb.GetString(stringId)
                                 .Replace("\r", "")
                                 .Replace("\n", " "))
                             .Append("\"");

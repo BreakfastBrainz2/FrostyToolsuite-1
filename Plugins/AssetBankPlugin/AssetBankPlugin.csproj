@@ -62,10 +62,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AssimpNet" Version="4.1.0" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Resource Include="Images\AntStateAssetFileType.png" />
     <Resource Include="Images\Eye.png" />
     <Resource Include="Images\Instances.png" />
@@ -73,6 +69,10 @@
 	<Resource Include="Images\SkinnedMeshFileType.png">
       <CopyToOutputDirectory></CopyToOutputDirectory>
     </Resource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AssimpNetter" Version="6.0.5" />
   </ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">

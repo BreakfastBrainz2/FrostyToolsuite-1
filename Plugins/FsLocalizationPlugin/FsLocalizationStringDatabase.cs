@@ -15,6 +15,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Diagnostics.Contracts;
 using System.Text;
+using FrostySdk;
 using FrostySdk.Managers.Entries;
 
 namespace FsLocalizationPlugin
@@ -149,8 +150,7 @@ namespace FsLocalizationPlugin
 
         public void Initialize()
         {
-            string language = "LanguageFormat_" + Config.Get<string>("Language", "English", ConfigScope.Game);
-            App.Logger.Log(language);
+            string language = "LanguageFormat_" + Config.Get("Language", "English", ConfigScope.Game);
 
             Guid binaryChunk = Guid.Empty;
             Guid histogram = Guid.Empty;
@@ -213,6 +213,77 @@ namespace FsLocalizationPlugin
         {
             foreach (uint key in loadedDatabase.EnumerateStrings())
                 yield return key;
+        }
+
+        public List<string> GetLanguages()
+        {
+            List<string> languageNames = new List<string>();
+
+            foreach (EbxAssetEntry localizationEntry in App.AssetManager.EnumerateEbx("LocalizationAsset"))
+            {
+                dynamic locRoot = App.AssetManager.GetEbx(localizationEntry).RootObject;
+                foreach (PointerRef pointer in locRoot.LocalizedTexts)
+                {
+                    EbxAssetEntry textEntry = App.AssetManager.GetEbxEntry(pointer.External.FileGuid);
+                    if (textEntry == null)
+                        continue;
+
+                    dynamic textDatabase = App.AssetManager.GetEbx(textEntry).RootObject;
+                    languageNames.Add(textDatabase.Language.ToString().Replace("LanguageFormat_", ""));
+                }
+            }
+            
+            if (languageNames.Count == 0)
+            {
+                languageNames.Add("English");
+            }
+
+            return languageNames;
+        }
+
+        public bool LoadSpecificLanguage(string langId)
+        {
+            langId = !langId.StartsWith("LanguageFormat_")
+                ? "LanguageFormat_" + langId
+                : langId;
+            
+            if (!Enum.IsDefined(TypeLibrary.GetType("LanguageFormat"), langId))
+            {
+                return false;
+            }
+
+            strings.Clear();
+            orderedIds.Clear();
+
+            foreach (EbxAssetEntry localizationEntry in App.AssetManager.EnumerateEbx("LocalizationAsset"))
+            {
+                dynamic loc = App.AssetManager.GetEbx(localizationEntry).RootObject;
+                foreach (PointerRef pointer in loc.LocalizedTexts)
+                {
+                    EbxAssetEntry textDatabaseEntry = App.AssetManager.GetEbxEntry(pointer.External.FileGuid);
+                    dynamic textDatabase = App.AssetManager.GetEbx(textDatabaseEntry).RootObject;
+
+                    // If the referenced database is null or the language of the database does not match the specified language, skip it
+                    if (textDatabase == null || textDatabase.Language.ToString() != langId)
+                    {
+                        continue;
+                    }
+                    
+                    loadedDatabase = App.AssetManager.GetEbxAs<FsLocalizationAsset>(textDatabaseEntry);
+
+                    textDatabaseEntry.AssetModified += delegate
+                    {
+                        loadedDatabase = App.AssetManager.GetEbxAs<FsLocalizationAsset>(textDatabaseEntry);
+                    };
+
+                    // Load the resource data
+                    AddResource(App.AssetManager.GetChunkEntry(textDatabase.BinaryChunk), App.AssetManager.GetChunkEntry(textDatabase.HistogramChunk));
+                    break;
+                }
+            }
+
+            //LoadedLanguage = name.Replace("LanguageFormat_", "");
+            return true;
         }
 
         public string GetString(uint id)
@@ -299,6 +370,9 @@ namespace FsLocalizationPlugin
 
         private void AddResource(ChunkAssetEntry binaryChunk, ChunkAssetEntry histogramChunk)
         {
+            if (binaryChunk is null || histogramChunk is null)
+                return;
+            
             List<ushort> values = new List<ushort>();
             using (NativeReader reader = new NativeReader(App.AssetManager.GetChunk(histogramChunk)))
             {
