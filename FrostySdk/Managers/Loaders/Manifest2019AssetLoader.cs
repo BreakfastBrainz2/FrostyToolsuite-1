@@ -2,6 +2,7 @@
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
+using FrostySdk.Exceptions;
 using FrostySdk.Interfaces;
 using FrostySdk.IO;
 using FrostySdk.Managers.Entries;

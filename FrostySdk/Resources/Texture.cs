@@ -396,9 +396,9 @@ namespace FrostySdk.Resources
 
         ~Texture() => Dispose(false);
 
-        public void SetData(Guid newChunkId, AssetManager am)
+        public void SetData(Guid newChunkId)
         {
-            Data = am.GetChunk(am.GetChunkEntry(newChunkId));
+            Data = AssetManager.GetChunk(AssetManager.GetChunkEntry(newChunkId));
 
             m_chunkId = newChunkId;
             ChunkSize = (uint)Data.Length;

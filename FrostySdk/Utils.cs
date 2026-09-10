@@ -15,6 +15,7 @@ using System.Text;
 using MessagePack;
 using MessagePack.Resolvers;
 using FrostySdk.BaseProfile;
+using FrostySdk.IO.Compression;
 
 namespace FrostySdk
 {

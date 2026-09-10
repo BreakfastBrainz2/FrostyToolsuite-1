@@ -323,6 +323,8 @@ public static class AssetManager
         }
     }
 
+    public static Block<byte> GetChunk(ChunkAssetEntry entry) => GetAsset(entry);
+
     public static Block<byte> GetAsset(AssetEntry entry)
     {
         return entry.FileInfo!.GetData((int)entry.OriginalSize);
@@ -578,7 +580,7 @@ public static class AssetManager
                  TypeLibrary.IsSubClassOf(entry.Type, "UIMetaDataAsset")))
             {
                 string name = $"{FileSystemManager.GamePlatform}/{entry.Name}_bundle";
-                string hash = Utils.Utils.HashString(name, true).ToString("X8");
+                string hash = Utils.HashString(name, true).ToString("X8");
 
                 BundleInfo? bundle = s_bundleMapping.Values.FirstOrDefault(b => b.Name == hash);
                 if (bundle is not null)
